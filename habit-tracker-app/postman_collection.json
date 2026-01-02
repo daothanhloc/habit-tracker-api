@@ -1,0 +1,355 @@
+{
+  "info": {
+    "name": "Habit Tracker API",
+    "description": "Complete API collection for testing all Habit Tracker endpoints",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Habits",
+      "description": "CRUD operations for habits",
+      "item": [
+        {
+          "name": "Create Habit",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Morning Exercise\",\n  \"description\": \"30 min workout at the gym\",\n  \"frequency\": \"daily\",\n  \"category\": \"health\",\n  \"color\": \"#3B82F6\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/habits",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "habits"
+              ]
+            },
+            "description": "Create a new habit"
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Habits",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/habits",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "habits"
+              ]
+            },
+            "description": "Get all habits for the user"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Habit by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/habits/{{habit_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "habits",
+                "{{habit_id}}"
+              ]
+            },
+            "description": "Get a specific habit by ID"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Habit",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Morning Exercise\",\n  \"description\": \"45 min workout at the gym\",\n  \"frequency\": \"daily\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/habits/{{habit_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "habits",
+                "{{habit_id}}"
+              ]
+            },
+            "description": "Update an existing habit"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Habit",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/habits/{{habit_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "habits",
+                "{{habit_id}}"
+              ]
+            },
+            "description": "Delete a habit"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Habit Tracking",
+      "description": "Log and view habit completions",
+      "item": [
+        {
+          "name": "Log Habit Completion",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"Great workout today! Felt strong and energized.\",\n  \"completedAt\": \"2025-01-01T18:30:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/habits/{{habit_id}}/track",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "habits",
+                "{{habit_id}}",
+                "track"
+              ]
+            },
+            "description": "Log a habit completion. Leave completedAt empty to use current time."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Habit Tracking History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/habits/{{habit_id}}/history?limit=30",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "habits",
+                "{{habit_id}}",
+                "history"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "30",
+                  "description": "Number of records to return (1-100)"
+                }
+              ]
+            },
+            "description": "Get tracking history for a habit (last 30 records by default)"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Current Streak",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/habits/{{habit_id}}/streak",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "habits",
+                "{{habit_id}}",
+                "streak"
+              ]
+            },
+            "description": "Get the current streak for a habit"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Habit Goals",
+      "description": "Set and track consistency goals",
+      "item": [
+        {
+          "name": "Create Goal",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"targetFrequency\": 5,\n  \"goalType\": \"weekly\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/habits/{{habit_id}}/goals",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "habits",
+                "{{habit_id}}",
+                "goals"
+              ]
+            },
+            "description": "Create a new consistency goal for a habit. goalType can be: weekly, monthly, yearly"
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Goals for Habit",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/habits/{{habit_id}}/goals",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "habits",
+                "{{habit_id}}",
+                "goals"
+              ]
+            },
+            "description": "Get all goals for a specific habit"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Goal Progress",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/habits/{{habit_id}}/goals/{{goal_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "habits",
+                "{{habit_id}}",
+                "goals",
+                "{{goal_id}}"
+              ]
+            },
+            "description": "Get progress towards a specific goal"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Goal",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"targetFrequency\": 6\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/habits/{{habit_id}}/goals/{{goal_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "habits",
+                "{{habit_id}}",
+                "goals",
+                "{{goal_id}}"
+              ]
+            },
+            "description": "Update an existing goal"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Goal",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/habits/{{habit_id}}/goals/{{goal_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "habits",
+                "{{habit_id}}",
+                "goals",
+                "{{goal_id}}"
+              ]
+            },
+            "description": "Delete a goal"
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string",
+      "description": "Base URL for the API"
+    },
+    {
+      "key": "habit_id",
+      "value": "",
+      "type": "string",
+      "description": "ID of a habit (from Create Habit response)"
+    },
+    {
+      "key": "goal_id",
+      "value": "",
+      "type": "string",
+      "description": "ID of a goal (from Create Goal response)"
+    }
+  ]
+}

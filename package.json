@@ -8,6 +8,7 @@
     "dev": "tsx watch src/main.ts",
     "build": "tsc",
     "start": "node dist/main.js",
+    "postinstall": "prisma generate",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
     "test": "jest",

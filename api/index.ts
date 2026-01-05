@@ -1,8 +1,8 @@
-import { createFastifyApp } from '../src/config/fastify';
-import authRoutes from '../src/routes/auth';
-import habitRoutes from '../src/routes/habits';
-import trackingRoutes from '../src/routes/tracking';
-import goalRoutes from '../src/routes/goals';
+import { createFastifyApp } from '../src/config/fastify.js';
+import authRoutes from '../src/routes/auth.js';
+import habitRoutes from '../src/routes/habits.js';
+import trackingRoutes from '../src/routes/tracking.js';
+import goalRoutes from '../src/routes/goals.js';
 
 let app: any = null;
 

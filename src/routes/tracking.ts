@@ -5,8 +5,8 @@ import {
   CreateHabitTrackingSchema,
   TrackingParamsSchema,
   type CreateHabitTrackingDto,
-} from "../schemas/tracking.schema";
-import { TrackingService } from "../services/tracking.service";
+} from "../schemas/tracking.schema.js";
+import { TrackingService } from "../services/tracking.service.js";
 
 // Tracking routes - habit completion tracking
 const trackingRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {

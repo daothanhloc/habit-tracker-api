@@ -11,8 +11,8 @@ import {
   type LoginDto,
   type RefreshTokenDto,
   type LogoutDto,
-} from '../schemas/auth.schema';
-import { AuthService } from '../services/auth.service';
+} from '../schemas/auth.schema.js';
+import { AuthService } from '../services/auth.service.js';
 
 // Auth routes - signup, login, refresh, logout
 const authRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {

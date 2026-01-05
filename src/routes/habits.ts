@@ -7,8 +7,8 @@ import {
   HabitParamsSchema,
   type CreateHabitDto,
   type UpdateHabitDto,
-} from "../schemas/habit.schema";
-import { HabitService } from "../services/habit.service";
+} from "../schemas/habit.schema.js";
+import { HabitService } from "../services/habit.service.js";
 
 // Habit routes - CRUD operations for habits
 // Mirrors pattern from examples/habbit.route.ts

@@ -2,9 +2,9 @@ import Fastify, { FastifyInstance } from 'fastify';
 import { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import cors from '@fastify/cors';
 import fastifyJwt from '@fastify/jwt';
-import authenticatePlugin from '../plugins/authenticate';
-import { prisma } from '../db/prisma';
-import { env } from './env';
+import authenticatePlugin from '../plugins/authenticate.js';
+import { prisma } from '../db/prisma.js';
+import { env } from './env.js';
 
 export async function createFastifyApp(): Promise<FastifyInstance> {
   // Initialize Fastify with TypeBox type provider for full type inference

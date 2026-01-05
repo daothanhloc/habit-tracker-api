@@ -1,9 +1,9 @@
-import { createFastifyApp } from './config/fastify';
-import { env } from './config/env';
-import authRoutes from './routes/auth';
-import habitRoutes from './routes/habits';
-import trackingRoutes from './routes/tracking';
-import goalRoutes from './routes/goals';
+import { createFastifyApp } from './config/fastify.js';
+import { env } from './config/env.js';
+import authRoutes from './routes/auth.js';
+import habitRoutes from './routes/habits.js';
+import trackingRoutes from './routes/tracking.js';
+import goalRoutes from './routes/goals.js';
 
 async function start() {
   try {

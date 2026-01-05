@@ -7,8 +7,8 @@ import {
   GoalParamsSchema,
   type CreateHabitGoalDto,
   type UpdateHabitGoalDto,
-} from "../schemas/goal.schema";
-import { GoalService } from "../services/goal.service";
+} from "../schemas/goal.schema.js";
+import { GoalService } from "../services/goal.service.js";
 
 // Goal routes - habit goal and consistency tracking
 const goalRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {

@@ -1,5 +1,5 @@
 import { PrismaClient, GoalType } from '@prisma/client';
-import { CreateHabitGoalDto, UpdateHabitGoalDto } from '../schemas/goal.schema';
+import { CreateHabitGoalDto, UpdateHabitGoalDto } from '../schemas/goal.schema.js';
 
 export class GoalService {
   constructor(private prisma: PrismaClient) {}

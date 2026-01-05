@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { CreateHabitTrackingDto } from '../schemas/tracking.schema';
+import { CreateHabitTrackingDto } from '../schemas/tracking.schema.js';
 
 export class TrackingService {
   constructor(private prisma: PrismaClient) {}

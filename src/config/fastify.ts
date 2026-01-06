@@ -72,6 +72,27 @@ export async function createFastifyApp(): Promise<FastifyInstance> {
     await prisma.$disconnect();
   });
 
+  // Health check endpoint for Render and monitoring
+  fastify.get('/health', async (request, reply) => {
+    try {
+      // Verify database connection
+      await prisma.$queryRaw`SELECT 1`;
+      return reply.send({
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        database: 'connected',
+      });
+    } catch (error) {
+      fastify.log.error(error, 'Health check failed');
+      return reply.code(503).send({
+        status: 'unhealthy',
+        timestamp: new Date().toISOString(),
+        database: 'disconnected',
+      });
+    }
+  });
+
   return fastify;
 }
 

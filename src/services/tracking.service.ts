@@ -4,6 +4,29 @@ import { CreateHabitTrackingDto } from "../schemas/tracking.schema.js";
 export class TrackingService {
   constructor(private prisma: PrismaClient) {}
 
+  private static readonly VNT_OFFSET_MS = 7 * 60 * 60 * 1000;
+  private static readonly MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+  private getVntDayIndex(date: Date): number {
+    return Math.floor(
+      (date.getTime() + TrackingService.VNT_OFFSET_MS) /
+        TrackingService.MS_PER_DAY
+    );
+  }
+
+  private getVntDayBounds(date: Date): { start: Date; end: Date } {
+    const vntMs = date.getTime() + TrackingService.VNT_OFFSET_MS;
+    const startVntMs =
+      Math.floor(vntMs / TrackingService.MS_PER_DAY) *
+      TrackingService.MS_PER_DAY;
+    const startUtcMs = startVntMs - TrackingService.VNT_OFFSET_MS;
+
+    return {
+      start: new Date(startUtcMs),
+      end: new Date(startUtcMs + TrackingService.MS_PER_DAY - 1),
+    };
+  }
+
   async logCompletion(
     habitId: string,
     userId: string,
@@ -13,12 +36,9 @@ export class TrackingService {
       ? new Date(data.completedAt)
       : new Date();
 
-    // Check if habit already logged for this date
-    const startOfDay = new Date(completedAt);
-    startOfDay.setHours(0, 0, 0, 0);
-
-    const endOfDay = new Date(completedAt);
-    endOfDay.setHours(23, 59, 59, 999);
+    // Check if habit already logged for this VNT date
+    const { start: startOfDay, end: endOfDay } =
+      this.getVntDayBounds(completedAt);
 
     const existingTracking = await this.prisma.habitTracking.findFirst({
       where: {
@@ -43,11 +63,10 @@ export class TrackingService {
     let streak = 1;
     if (lastTracking) {
       const lastDate = new Date(lastTracking.completedAt);
-      const daysDiff = Math.floor(
-        (completedAt.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24)
-      );
+      const daysDiff =
+        this.getVntDayIndex(completedAt) - this.getVntDayIndex(lastDate);
 
-      // If consecutive day, increment streak
+      // If consecutive VNT day, increment streak
       if (daysDiff === 1) {
         streak = lastTracking.streak + 1;
       }

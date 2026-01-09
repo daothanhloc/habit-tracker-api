@@ -4,13 +4,24 @@ import { CreateHabitDto, UpdateHabitDto } from "../schemas/habit.schema";
 export class HabitService {
   constructor(private prisma: PrismaClient) {}
 
+  private static readonly VNT_OFFSET_MS = 7 * 60 * 60 * 1000;
+  private static readonly MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+  private getVntDayBounds(date: Date): { start: Date; end: Date } {
+    const vntMs = date.getTime() + HabitService.VNT_OFFSET_MS;
+    const startVntMs =
+      Math.floor(vntMs / HabitService.MS_PER_DAY) * HabitService.MS_PER_DAY;
+    const startUtcMs = startVntMs - HabitService.VNT_OFFSET_MS;
+
+    return {
+      start: new Date(startUtcMs),
+      end: new Date(startUtcMs + HabitService.MS_PER_DAY - 1),
+    };
+  }
+
   private async isTrackedToday(habitId: string, userId: string): Promise<boolean> {
     const now = new Date();
-    const startOfDay = new Date(now);
-    startOfDay.setHours(0, 0, 0, 0);
-
-    const endOfDay = new Date(now);
-    endOfDay.setHours(23, 59, 59, 999);
+    const { start: startOfDay, end: endOfDay } = this.getVntDayBounds(now);
 
     const tracking = await this.prisma.habitTracking.findFirst({
       where: {
@@ -60,11 +71,7 @@ export class HabitService {
 
     // Calculate today's date boundaries
     const now = new Date();
-    const startOfDay = new Date(now);
-    startOfDay.setHours(0, 0, 0, 0);
-
-    const endOfDay = new Date(now);
-    endOfDay.setHours(23, 59, 59, 999);
+    const { start: startOfDay, end: endOfDay } = this.getVntDayBounds(now);
 
     // Query all today's tracking for this user
     const todaysTracking = await this.prisma.habitTracking.findMany({

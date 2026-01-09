@@ -2,6 +2,8 @@ import Fastify, { FastifyInstance } from 'fastify';
 import { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import cors from '@fastify/cors';
 import fastifyJwt from '@fastify/jwt';
+import swagger from '@fastify/swagger';
+import swaggerUi from '@fastify/swagger-ui';
 import authenticatePlugin from '../plugins/authenticate.js';
 import { prisma } from '../db/prisma.js';
 import { env } from './env.js';
@@ -42,6 +44,50 @@ export async function createFastifyApp(): Promise<FastifyInstance> {
 
   // Register authentication plugin (adds authenticate decorator)
   await fastify.register(authenticatePlugin);
+
+  // Register Swagger plugin - generates OpenAPI spec from route schemas
+  await fastify.register(swagger, {
+    openapi: {
+      openapi: '3.0.3',
+      info: {
+        title: 'Habit Tracker API',
+        description: 'REST API for tracking daily habits and consistency metrics',
+        version: '1.0.0',
+      },
+      servers: [
+        {
+          url: 'http://localhost:3000',
+          description: 'Development server',
+        },
+      ],
+      tags: [
+        { name: 'Auth', description: 'Authentication endpoints' },
+        { name: 'Habits', description: 'Habit CRUD operations' },
+        { name: 'Tracking', description: 'Habit completion tracking' },
+        { name: 'Goals', description: 'Habit goals and progress' },
+      ],
+      components: {
+        securitySchemes: {
+          bearerAuth: {
+            type: 'http',
+            scheme: 'bearer',
+            bearerFormat: 'JWT',
+            description: 'Enter JWT token from /auth/login or /auth/signup',
+          },
+        },
+      },
+    },
+  });
+
+  // Register Swagger UI - serves the documentation interface
+  await fastify.register(swaggerUi, {
+    routePrefix: '/documentation',
+    uiConfig: {
+      docExpansion: 'list',
+      deepLinking: true,
+    },
+    staticCSP: true,
+  });
 
   // Decorate fastify instance with PrismaClient for easy access in routes
   fastify.decorate('prisma', prisma);

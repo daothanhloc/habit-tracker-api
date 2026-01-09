@@ -24,6 +24,8 @@ const goalRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     {
       onRequest: [fastify.authenticate],
       schema: {
+        tags: ['Goals'],
+        security: [{ bearerAuth: [] }],
         summary: "Create a habit goal",
         description:
           "Sets a consistency goal for a habit (weekly, monthly, yearly)",
@@ -71,6 +73,8 @@ const goalRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     {
       onRequest: [fastify.authenticate],
       schema: {
+        tags: ['Goals'],
+        security: [{ bearerAuth: [] }],
         summary: "Get all goals for a habit",
         description: "Retrieves all consistency goals for a habit",
         params: GoalParamsSchema,
@@ -99,6 +103,8 @@ const goalRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     {
       onRequest: [fastify.authenticate],
       schema: {
+        tags: ['Goals'],
+        security: [{ bearerAuth: [] }],
         summary: "Get goal progress",
         description:
           "Retrieves progress towards a specific goal (completions vs target)",
@@ -143,6 +149,8 @@ const goalRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     {
       onRequest: [fastify.authenticate],
       schema: {
+        tags: ['Goals'],
+        security: [{ bearerAuth: [] }],
         summary: "Update a goal",
         description: "Updates the target frequency or goal type",
         params: GoalParamsSchema,
@@ -179,6 +187,8 @@ const goalRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     {
       onRequest: [fastify.authenticate],
       schema: {
+        tags: ['Goals'],
+        security: [{ bearerAuth: [] }],
         summary: "Delete a goal",
         description: "Removes a goal from a habit",
         params: GoalParamsSchema,

@@ -1,5 +1,5 @@
-import { PrismaClient } from '@prisma/client';
-import { CreateHabitTrackingDto } from '../schemas/tracking.schema.js';
+import { PrismaClient } from "@prisma/client";
+import { CreateHabitTrackingDto } from "../schemas/tracking.schema.js";
 
 export class TrackingService {
   constructor(private prisma: PrismaClient) {}
@@ -7,7 +7,7 @@ export class TrackingService {
   async logCompletion(
     habitId: string,
     userId: string,
-    data: CreateHabitTrackingDto,
+    data: CreateHabitTrackingDto
   ) {
     const completedAt = data.completedAt
       ? new Date(data.completedAt)
@@ -31,20 +31,20 @@ export class TrackingService {
     });
 
     if (existingTracking) {
-      throw new Error('Habit already logged for this date');
+      throw new Error("Habit already logged for this date");
     }
 
     // Calculate streak
     const lastTracking = await this.prisma.habitTracking.findFirst({
       where: { habitId },
-      orderBy: { completedAt: 'desc' },
+      orderBy: { completedAt: "desc" },
     });
 
     let streak = 1;
     if (lastTracking) {
       const lastDate = new Date(lastTracking.completedAt);
       const daysDiff = Math.floor(
-        (completedAt.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24),
+        (completedAt.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24)
       );
 
       // If consecutive day, increment streak
@@ -68,7 +68,7 @@ export class TrackingService {
     habitId: string,
     limit: number = 30,
     from?: Date,
-    to?: Date,
+    to?: Date
   ) {
     const where: any = { habitId };
 
@@ -80,7 +80,7 @@ export class TrackingService {
 
     return await this.prisma.habitTracking.findMany({
       where,
-      orderBy: { completedAt: 'desc' },
+      orderBy: { completedAt: "desc" },
       take: limit,
     });
   }
@@ -88,7 +88,7 @@ export class TrackingService {
   async getStreak(habitId: string): Promise<number> {
     const lastTracking = await this.prisma.habitTracking.findFirst({
       where: { habitId },
-      orderBy: { completedAt: 'desc' },
+      orderBy: { completedAt: "desc" },
     });
 
     if (!lastTracking) {

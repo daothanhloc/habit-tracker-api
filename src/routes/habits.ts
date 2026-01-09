@@ -21,6 +21,8 @@ const habitRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     {
       onRequest: [fastify.authenticate],
       schema: {
+        tags: ['Habits'],
+        security: [{ bearerAuth: [] }],
         summary: "Create a new habit",
         description: "Creates a new habit for the user",
         body: CreateHabitSchema,
@@ -54,6 +56,8 @@ const habitRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     {
       onRequest: [fastify.authenticate],
       schema: {
+        tags: ['Habits'],
+        security: [{ bearerAuth: [] }],
         summary: "Get all habits",
         description: "Returns all habits for the current user",
         response: {
@@ -77,6 +81,8 @@ const habitRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     {
       onRequest: [fastify.authenticate],
       schema: {
+        tags: ['Habits'],
+        security: [{ bearerAuth: [] }],
         summary: "Get habit by ID",
         description: "Retrieves a specific habit by its ID",
         params: HabitParamsSchema,
@@ -107,6 +113,8 @@ const habitRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     {
       onRequest: [fastify.authenticate],
       schema: {
+        tags: ['Habits'],
+        security: [{ bearerAuth: [] }],
         summary: "Update a habit",
         description: "Updates an existing habit",
         params: HabitParamsSchema,
@@ -144,6 +152,8 @@ const habitRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     {
       onRequest: [fastify.authenticate],
       schema: {
+        tags: ['Habits'],
+        security: [{ bearerAuth: [] }],
         summary: "Delete a habit",
         description: "Deletes a habit and all its associated tracking records",
         params: HabitParamsSchema,

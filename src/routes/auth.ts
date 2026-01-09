@@ -26,6 +26,7 @@ const authRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     '/signup',
     {
       schema: {
+        tags: ['Auth'],
         summary: 'User signup',
         description: 'Register a new user account',
         body: SignupSchema,
@@ -89,6 +90,7 @@ const authRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     '/login',
     {
       schema: {
+        tags: ['Auth'],
         summary: 'User login',
         description: 'Authenticate user and return tokens',
         body: LoginSchema,
@@ -148,6 +150,7 @@ const authRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     '/refresh',
     {
       schema: {
+        tags: ['Auth'],
         summary: 'Refresh access token',
         description:
           'Get new access and refresh tokens using a valid refresh token',
@@ -228,6 +231,8 @@ const authRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     {
       onRequest: [fastify.authenticate],
       schema: {
+        tags: ['Auth'],
+        security: [{ bearerAuth: [] }],
         summary: 'User logout',
         description: 'Revoke refresh token to log out user',
         body: LogoutSchema,

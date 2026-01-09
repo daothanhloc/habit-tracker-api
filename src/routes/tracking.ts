@@ -22,6 +22,8 @@ const trackingRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     {
       onRequest: [fastify.authenticate],
       schema: {
+        tags: ['Tracking'],
+        security: [{ bearerAuth: [] }],
         summary: "Log habit completion",
         description: "Records a habit completion for today or a specific date",
         params: TrackingParamsSchema,
@@ -68,6 +70,8 @@ const trackingRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     {
       onRequest: [fastify.authenticate],
       schema: {
+        tags: ['Tracking'],
+        security: [{ bearerAuth: [] }],
         summary: "Get habit tracking history",
         description: "Retrieves all tracking records for a habit",
         params: TrackingParamsSchema,
@@ -101,6 +105,8 @@ const trackingRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     {
       onRequest: [fastify.authenticate],
       schema: {
+        tags: ['Tracking'],
+        security: [{ bearerAuth: [] }],
         summary: "Get current streak",
         description: "Returns the current streak for a habit",
         params: TrackingParamsSchema,

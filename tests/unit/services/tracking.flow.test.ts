@@ -12,8 +12,12 @@ const addDays = (dateStr: string, n: number) =>
   formatDateOnly(new Date(parseDateOnly(dateStr).getTime() + n * 86400000));
 
 describe('tracking + streak scenarios (TaskService.upsert)', () => {
-  const today = vntTodayDateOnly();
-  const d = (offset: number) => addDays(today, offset);
+  // Re-anchored per test (in beforeEach) so one test never straddles VNT midnight.
+  let d: (offset: number) => string;
+  beforeEach(() => {
+    const today = vntTodayDateOnly();
+    d = (offset: number) => addDays(today, offset);
+  });
 
   function setup(overrides: Partial<InMemoryHabit> = {}) {
     const habit: InMemoryHabit = {
@@ -153,7 +157,7 @@ describe('tracking + streak scenarios (TaskService.upsert)', () => {
       // DONE with qualifying value: counts
       await mark(s, d(-2), 'done');
       // DONE with explicit null value: does not count
-      await s.service.upsert('habit-1', 'user-1', d(-1), { status: 'done', value: null } as any);
+      await s.service.upsert('habit-1', 'user-1', d(-1), { status: 'done', value: null });
       expect(s.tasks.get(d(-1)).value).toBeNull();
       expect((await progress(s)).current).toBe(1);
     });

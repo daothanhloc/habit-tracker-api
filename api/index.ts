@@ -1,8 +1,8 @@
 import { createFastifyApp } from '../src/config/fastify.js';
 import authRoutes from '../src/routes/auth.js';
-import habitRoutes from '../src/routes/habits.js';
-import trackingRoutes from '../src/routes/tracking.js';
 import goalRoutes from '../src/routes/goals.js';
+import habitRoutes from '../src/routes/habits.js';
+import taskRoutes from '../src/routes/tasks.js';
 
 let app: any = null;
 
@@ -13,9 +13,9 @@ async function build() {
 
   // Register routes
   await fastify.register(authRoutes, { prefix: '/auth' });
-  await fastify.register(habitRoutes, { prefix: '/habits' });
-  await fastify.register(trackingRoutes, { prefix: '/habits' });
-  await fastify.register(goalRoutes, { prefix: '/habits' });
+  await fastify.register(goalRoutes, { prefix: '/goals' });
+  await fastify.register(habitRoutes);
+  await fastify.register(taskRoutes);
 
   await fastify.ready();
   app = fastify;

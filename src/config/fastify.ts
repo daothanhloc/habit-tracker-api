@@ -62,9 +62,9 @@ export async function createFastifyApp(): Promise<FastifyInstance> {
       ],
       tags: [
         { name: 'Auth', description: 'Authentication endpoints' },
+        { name: 'Goals', description: 'Goal CRUD and derived progress' },
         { name: 'Habits', description: 'Habit CRUD operations' },
-        { name: 'Tracking', description: 'Habit completion tracking' },
-        { name: 'Goals', description: 'Habit goals and progress' },
+        { name: 'Tasks', description: 'Per-day task tracking for a habit' },
       ],
       components: {
         securitySchemes: {

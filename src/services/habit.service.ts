@@ -37,7 +37,7 @@ export class HabitService {
       },
     });
 
-    return this.toSummary(habit, { current: 0, target: this.targetFor(habit) });
+    return this.toDetail(habit, { current: 0, target: this.targetFor(habit) });
   }
 
   // Habit summaries embedded in a Goal response, with progress computed
@@ -53,6 +53,21 @@ export class HabitService {
     );
   }
 
+  // GET /goals/:goalId/habits returns full habits (HabitSchema), not the
+  // lightweight summaries embedded in a Goal response.
+  async listForGoal(goal: { id: string; startDate: Date; endDate: Date }) {
+    const habits = await this.prisma.habit.findMany({
+      where: { goalId: goal.id },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    return Promise.all(
+      habits.map(async (habit) =>
+        this.toDetail(habit, await this.progressFor(habit, goal.startDate, goal.endDate))
+      )
+    );
+  }
+
   async findById(habitId: string, userId: string) {
     const habit = await this.prisma.habit.findFirst({
       where: { id: habitId, userId },
@@ -62,19 +77,10 @@ export class HabitService {
       return null;
     }
 
-    const summary = await this.withProgress(
+    return this.toDetail(
       habit,
-      habit.goal.startDate,
-      habit.goal.endDate
+      await this.progressFor(habit, habit.goal.startDate, habit.goal.endDate)
     );
-
-    return {
-      ...summary,
-      goalId: habit.goalId,
-      userId: habit.userId,
-      createdAt: habit.createdAt,
-      updatedAt: habit.updatedAt,
-    };
   }
 
   async update(habitId: string, userId: string, data: UpdateHabitDto) {
@@ -124,19 +130,10 @@ export class HabitService {
       await this.recomputeStreak(habitId);
     }
 
-    const summary = await this.withProgress(
+    return this.toDetail(
       habit,
-      existing.goal.startDate,
-      existing.goal.endDate
+      await this.progressFor(habit, existing.goal.startDate, existing.goal.endDate)
     );
-
-    return {
-      ...summary,
-      goalId: habit.goalId,
-      userId: habit.userId,
-      createdAt: habit.createdAt,
-      updatedAt: habit.updatedAt,
-    };
   }
 
   async delete(habitId: string, userId: string) {
@@ -203,20 +200,22 @@ export class HabitService {
   }
 
   private async withProgress(habit: PrismaHabit, startDate: Date, endDate: Date) {
+    return this.toSummary(habit, await this.progressFor(habit, startDate, endDate));
+  }
+
+  private async progressFor(habit: PrismaHabit, startDate: Date, endDate: Date) {
     const tasks = await this.prisma.task.findMany({
       where: { habitId: habit.id, date: { gte: startDate, lte: endDate } },
       select: { value: true },
     });
 
-    const progress = computeProgress(
+    return computeProgress(
       habit.goalType,
       habit.targetValue,
       habit.dailyMinValue,
       habit.targetDays,
       tasks
     );
-
-    return this.toSummary(habit, progress);
   }
 
   private targetFor(habit: PrismaHabit): number {
@@ -242,6 +241,20 @@ export class HabitService {
       progress,
       currentStreak: habit.currentStreak,
       longestStreak: habit.longestStreak,
+    };
+  }
+
+  // Full habit (HabitSchema): summary plus ownership/timestamps.
+  private toDetail(
+    habit: PrismaHabit,
+    progress: { current: number; target: number }
+  ) {
+    return {
+      ...this.toSummary(habit, progress),
+      goalId: habit.goalId,
+      userId: habit.userId,
+      createdAt: habit.createdAt,
+      updatedAt: habit.updatedAt,
     };
   }
 }

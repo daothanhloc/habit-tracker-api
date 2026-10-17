@@ -84,7 +84,7 @@ const habitRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
       if (!goal) {
         return reply.code(404).send({ message: 'Goal not found' } as any);
       }
-      const habits = await habitService.listSummariesForGoal(goal);
+      const habits = await habitService.listForGoal(goal);
       return reply.send(habits as any);
     }
   );

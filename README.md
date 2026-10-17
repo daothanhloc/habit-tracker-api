@@ -4,12 +4,12 @@ A production-ready REST API for tracking daily habits and consistency metrics. B
 
 ## Features
 
-- ✅ Create, read, update, and delete habits
-- ✅ Track daily habit completion with automatic streak calculation
-- ✅ Set consistency goals (weekly, monthly, yearly)
-- ✅ View habit history and progress metrics
-- ✅ Type-safe API with full TypeScript support
-- ✅ Comprehensive validation with TypeBox schemas
+- ✅ Goals with a calendar period (start/end date) that group habits
+- ✅ Habits belong to a goal, scheduled on specific weekdays
+- ✅ Two progress modes: `sum` (total over the period) and `threshold_count` (N days meeting a daily minimum)
+- ✅ Daily tasks, lazily created per scheduled day, with streak tracking
+- ✅ JWT auth (access + refresh tokens)
+- ✅ Type-safe API with TypeBox validation and Swagger docs
 - ✅ PostgreSQL with Prisma ORM for data persistence
 
 ## Quick Start
@@ -73,9 +73,9 @@ A production-ready REST API for tracking daily habits and consistency metrics. B
 
    This creates:
    - 1 test user (test@example.com)
-   - 3 sample habits (Morning Exercise, Read, Meditate)
-   - 1 sample goal (5x per week for Morning Exercise)
-   - 3 sample tracking records with streak data
+   - 1 sample goal ("Get Fit")
+   - 2 sample habits (Run, Sleep)
+   - 3 completed sample tasks for Run, with a 3-day streak
 
 7. **Start the development server**:
    ```bash
@@ -87,244 +87,86 @@ A production-ready REST API for tracking daily habits and consistency metrics. B
 ## Project Structure
 
 ```
-habbit-tracker-api/
+habit-tracker-api/
+├── api/index.ts                     # Vercel serverless entry
 ├── src/
-│   ├── main.ts                      # Application entry point
-│   ├── config/
-│   │   ├── env.ts                  # Environment variables validation
-│   │   └── fastify.ts              # Fastify configuration and setup
-│   ├── db/
-│   │   └── prisma.ts               # PrismaClient singleton
-│   ├── schemas/
-│   │   ├── common.schema.ts         # Shared schemas
-│   │   ├── habit.schema.ts          # Habit schemas and DTOs
-│   │   ├── tracking.schema.ts       # Tracking record schemas
-│   │   └── goal.schema.ts           # Goal schemas and DTOs
-│   ├── routes/
-│   │   ├── habits.ts                # Habit CRUD routes
-│   │   ├── tracking.ts              # Habit tracking routes
-│   │   └── goals.ts                 # Goal management routes
-│   └── services/
-│       ├── habit.service.ts         # Habit business logic
-│       ├── tracking.service.ts      # Tracking business logic
-│       └── goal.service.ts          # Goal business logic
-├── prisma/
-│   └── schema.prisma                # Database schema
-├── tests/
-│   ├── unit/                        # Unit tests for services
-│   └── integration/                 # Integration tests for API
-├── package.json                     # Dependencies and scripts
-├── tsconfig.json                    # TypeScript configuration
-├── jest.config.js                   # Jest configuration
-└── README.md                        # This file
+│   ├── main.ts                      # Local entry point - registers routes
+│   ├── config/                      # env validation, Fastify setup/error handler
+│   ├── plugins/authenticate.ts      # JWT auth decorator
+│   ├── db/prisma.ts                 # PrismaClient singleton
+│   ├── schemas/                     # TypeBox schemas: auth, common, goal, habit, task
+│   ├── routes/                      # auth, goals, habits, tasks
+│   └── services/                    # goal, habit, task business logic
+├── prisma/schema.prisma             # Database schema
+├── tests/                           # unit (services) and integration (routes)
+└── PRPs/                            # Planning docs (see HABIT_TRACKER_V2_SCHEMA_API.md)
 ```
 
 ## API Endpoints
 
-### Habits
+Everything except `/auth/signup`, `/auth/login`, `/auth/refresh` and `/health` needs
+`Authorization: Bearer <accessToken>`. Interactive docs are served by Swagger UI.
 
-#### Create Habit
-```bash
-POST /habits
-Content-Type: application/json
+Hierarchy: **Goal → Habit → Task**. A habit is always created *under* a goal, so
+`goalId` is a **URL path parameter**, never a body field.
 
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/auth/signup` | Register (`email`, `password` 8-72 chars, optional `name`) |
+| POST | `/auth/login` | Returns `accessToken`, `refreshToken`, `user` |
+| POST | `/auth/refresh` | Body `{ refreshToken }` → new tokens |
+| POST | `/auth/logout` | Body `{ refreshToken }` → 204 |
+| POST | `/goals` | Create goal (`title`, `startDate`, `endDate` as `YYYY-MM-DD`) |
+| GET | `/goals` | List goals with habit summaries and progress |
+| GET | `/goals/:goalId` | Get one goal |
+| PUT | `/goals/:goalId` | Update goal (all fields optional) |
+| DELETE | `/goals/:goalId` | Delete goal; cascades to habits and tasks (204) |
+| POST | `/goals/:goalId/habits` | Create habit under a goal (201) |
+| GET | `/goals/:goalId/habits` | List a goal's habits |
+| GET | `/habits/:habitId` | Get one habit |
+| PUT | `/habits/:habitId` | Update habit (all fields optional) |
+| DELETE | `/habits/:habitId` | Delete habit (204) |
+| GET | `/habits/:habitId/tasks?from=&to=` | Tasks in a date range |
+| GET | `/habits/:habitId/tasks/today` | Today's task (404 if not scheduled today) |
+| PUT | `/habits/:habitId/tasks/:date` | Set a task's `value` / `status` |
+| GET | `/health` | Health check (includes DB ping) |
+
+### Create Habit
+
+`POST /goals/:goalId/habits` - the body is one of two variants, chosen by `goalType`:
+
+```json
 {
-  "name": "Morning Exercise",
-  "description": "30 min workout",
-  "frequency": "daily",
-  "category": "health"
-}
-
-Response (201):
-{
-  "id": "uuid",
-  "userId": "user-id",
-  "name": "Morning Exercise",
-  "description": "30 min workout",
-  "frequency": "daily",
-  "category": "health",
-  "isActive": true,
-  "createdAt": "2025-01-01T08:00:00Z",
-  "updatedAt": "2025-01-01T08:00:00Z"
-}
-```
-
-#### Get All Habits
-```bash
-GET /habits
-
-Response (200):
-[
-  {
-    "id": "uuid",
-    "name": "Morning Exercise",
-    ...
-  }
-]
-```
-
-#### Get Single Habit
-```bash
-GET /habits/:id
-
-Response (200):
-{
-  "id": "uuid",
-  "name": "Morning Exercise",
-  ...
+  "name": "Run",
+  "goalType": "sum",
+  "unit": "km",
+  "targetValue": 100,
+  "frequencyDays": [1, 3, 5],
+  "defaultTaskValue": 5
 }
 ```
 
-#### Update Habit
-```bash
-PUT /habits/:id
-Content-Type: application/json
-
+```json
 {
-  "name": "Updated Name",
-  "frequency": "weekly"
-}
-
-Response (200):
-{
-  "id": "uuid",
-  "name": "Updated Name",
-  ...
+  "name": "Sleep",
+  "goalType": "threshold_count",
+  "unit": "hours",
+  "dailyMinValue": 7,
+  "targetDays": 20,
+  "frequencyDays": [0, 1, 2, 3, 4, 5, 6],
+  "defaultTaskValue": 8
 }
 ```
 
-#### Delete Habit
-```bash
-DELETE /habits/:id
+- `frequencyDays`: at least one day, `0`=Sunday … `6`=Saturday
+- `sum`: requires `targetValue` (> 0)
+- `threshold_count`: requires `dailyMinValue` (> 0) and `targetDays` (≥ 1); a day counts when its task value ≥ `dailyMinValue`
+- Request enums are lowercase (`sum`, `done`); responses are uppercase (`SUM`, `DONE`)
 
-Response (204): No content
-```
+### Upsert Task
 
-### Habit Tracking
-
-#### Log Habit Completion
-```bash
-POST /habits/:habitId/track
-Content-Type: application/json
-
-{
-  "notes": "Great workout today!",
-  "completedAt": "2025-01-01T18:30:00Z" // optional, defaults to now
-}
-
-Response (201):
-{
-  "id": "uuid",
-  "habitId": "uuid",
-  "userId": "user-id",
-  "completedAt": "2025-01-01T18:30:00Z",
-  "notes": "Great workout today!",
-  "streak": 5,
-  "createdAt": "2025-01-01T18:30:00Z"
-}
-```
-
-#### Get Habit History
-```bash
-GET /habits/:habitId/history?limit=30
-
-Response (200):
-[
-  {
-    "id": "uuid",
-    "completedAt": "2025-01-01T18:30:00Z",
-    "streak": 5,
-    ...
-  }
-]
-```
-
-#### Get Current Streak
-```bash
-GET /habits/:habitId/streak
-
-Response (200):
-{
-  "streak": 5
-}
-```
-
-### Habit Goals
-
-#### Create Goal
-```bash
-POST /habits/:habitId/goals
-Content-Type: application/json
-
-{
-  "targetFrequency": 5,
-  "goalType": "weekly"
-}
-
-Response (201):
-{
-  "id": "uuid",
-  "habitId": "uuid",
-  "targetFrequency": 5,
-  "goalType": "weekly",
-  ...
-}
-```
-
-#### Get Goals
-```bash
-GET /habits/:habitId/goals
-
-Response (200):
-[
-  {
-    "id": "uuid",
-    "targetFrequency": 5,
-    "goalType": "weekly",
-    ...
-  }
-]
-```
-
-#### Get Goal Progress
-```bash
-GET /habits/:habitId/goals/:goalId
-
-Response (200):
-{
-  "goal": {
-    "id": "uuid",
-    ...
-  },
-  "completions": 3,
-  "targetFrequency": 5,
-  "percentage": 60
-}
-```
-
-#### Update Goal
-```bash
-PUT /habits/:habitId/goals/:goalId
-Content-Type: application/json
-
-{
-  "targetFrequency": 6
-}
-
-Response (200):
-{
-  "id": "uuid",
-  "targetFrequency": 6,
-  ...
-}
-```
-
-#### Delete Goal
-```bash
-DELETE /habits/:habitId/goals/:goalId
-
-Response (204): No content
-```
+`PUT /habits/:habitId/tasks/:date` with `{ "value": 5, "status": "done" }` (both optional).
+Future dates return 400; dates outside the habit's `frequencyDays` return 404.
 
 ## Available Scripts
 
@@ -400,103 +242,55 @@ npm run test:coverage
 
 #### Option 2: Using cURL
 
-Start the development server:
-```bash
-npm run dev
-```
-
-Then test endpoints (note: make sure to run `npm run db:seed` first):
+Start the development server (`npm run dev`), then:
 
 ```bash
-# Create a habit
-curl -X POST http://localhost:3000/habits \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Daily Coding",
-    "description": "2 hours of coding practice",
-    "frequency": "daily",
-    "category": "learning"
-  }'
+BASE=http://localhost:3000
 
-# Get all habits
-curl http://localhost:3000/habits
-
-# Log habit completion
-curl -X POST http://localhost:3000/habits/{habitId}/track \
-  -H "Content-Type: application/json" \
-  -d '{
-    "notes": "Great coding session today!"
-  }'
-
-# Get streak
-curl http://localhost:3000/habits/{habitId}/streak
+# Sign up (or log in) and grab the access token
+TOKEN=$(curl -s -X POST $BASE/auth/signup -H "Content-Type: application/json" \
+  -d '{"email":"me@example.com","password":"password123"}' | jq -r .accessToken)
 
 # Create a goal
-curl -X POST http://localhost:3000/habits/{habitId}/goals \
-  -H "Content-Type: application/json" \
-  -d '{
-    "targetFrequency": 5,
-    "goalType": "weekly"
-  }'
+GOAL_ID=$(curl -s -X POST $BASE/goals \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"title":"Get Fit","startDate":"2026-10-01","endDate":"2026-10-31"}' | jq -r .id)
 
-# Get goal progress
-curl http://localhost:3000/habits/{habitId}/goals/{goalId}
+# Create a habit under that goal (goalId is in the URL, not the body)
+HABIT_ID=$(curl -s -X POST $BASE/goals/$GOAL_ID/habits \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"name":"Run","goalType":"sum","unit":"km","targetValue":100,"frequencyDays":[1,3,5],"defaultTaskValue":5}' | jq -r .id)
+
+# List the goal's habits
+curl -s $BASE/goals/$GOAL_ID/habits -H "Authorization: Bearer $TOKEN"
+
+# Mark a task done
+curl -s -X PUT $BASE/habits/$HABIT_ID/tasks/2026-10-16 \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"value":5,"status":"done"}'
 ```
-
-**Important**: Replace `{habitId}` and `{goalId}` with actual IDs from the responses.
 
 ## Database Schema
 
 ### Models
 
-- **User**: Stores user information
-  - `id` (String, PK): Unique identifier
-  - `email` (String, Unique): User email
-  - `name` (String, Optional): User name
-  - `createdAt` (DateTime): Creation timestamp
-  - `updatedAt` (DateTime): Last update timestamp
+- **User**: `id`, `email` (unique), `name`, timestamps
+- **Goal**: `id`, `userId`, `title`, `startDate`, `endDate` (calendar dates), timestamps
+- **Habit**: belongs to one Goal
+  - `goalType`: `SUM` or `THRESHOLD_COUNT`
+  - `targetValue` (SUM), or `dailyMinValue` + `targetDays` (THRESHOLD_COUNT)
+  - `frequencyDays` (`Int[]`, 0=Sun..6=Sat), `unit`, `defaultTaskValue`
+  - `currentStreak`, `longestStreak`
+- **Task**: one scheduled day of a Habit - `habitId`, `date`, `value`, `status` (`DONE` | `NOT_DONE`), `completedAt`; unique per (`habitId`, `date`)
+- **RefreshToken**: stored refresh tokens for revocation
 
-- **Habit**: Represents a habit to track
-  - `id` (String, PK): Unique identifier
-  - `userId` (String, FK): Reference to User
-  - `name` (String, Unique per user): Habit name
-  - `description` (String, Optional): Habit description
-  - `frequency` (Enum): DAILY, WEEKLY, or MONTHLY
-  - `category` (String, Optional): Habit category
-  - `isActive` (Boolean): Whether habit is active
-  - `color` (String, Optional): UI color for habit
-  - `createdAt` (DateTime): Creation timestamp
-  - `updatedAt` (DateTime): Last update timestamp
-
-- **HabitTracking**: Records habit completions
-  - `id` (String, PK): Unique identifier
-  - `habitId` (String, FK): Reference to Habit
-  - `userId` (String, FK): Reference to User
-  - `completedAt` (DateTime, Unique per habit per date): Completion timestamp
-  - `notes` (String, Optional): User notes
-  - `streak` (Integer): Current streak at this record
-  - `createdAt` (DateTime): Record creation timestamp
-
-- **HabitGoal**: Consistency goals for habits
-  - `id` (String, PK): Unique identifier
-  - `habitId` (String, FK): Reference to Habit
-  - `userId` (String, FK): Reference to User
-  - `targetFrequency` (Integer): Target completions per period
-  - `goalType` (Enum): WEEKLY, MONTHLY, or YEARLY
-  - `createdAt` (DateTime): Creation timestamp
-  - `updatedAt` (DateTime): Last update timestamp
-
-## Frequency Values
-
-- `daily`: Track every day
-- `weekly`: Track multiple times per week
-- `monthly`: Track multiple times per month
+Deleting a Goal cascades to its Habits, and deleting a Habit cascades to its Tasks.
+Full design: `PRPs/HABIT_TRACKER_V2_SCHEMA_API.md`.
 
 ## Goal Types
 
-- `weekly`: Weekly consistency goal
-- `monthly`: Monthly consistency goal
-- `yearly`: Yearly consistency goal
+- `sum`: progress is the total of task values over the goal period, against `targetValue`
+- `threshold_count`: progress is the number of days with task value ≥ `dailyMinValue`, against `targetDays`
 
 ## Future Features
 

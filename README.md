@@ -289,8 +289,8 @@ Full design: `PRPs/HABIT_TRACKER_V2_SCHEMA_API.md`.
 
 ## Goal Types
 
-- `sum`: progress is the total of task values over the goal period, against `targetValue`
-- `threshold_count`: progress is the number of days with task value ≥ `dailyMinValue`, against `targetDays`
+- `sum`: progress is computed over DONE tasks: the total of the values of DONE tasks, against `targetValue`
+- `threshold_count`: progress is computed over DONE tasks: the number of DONE tasks whose value >= `dailyMinValue`, against `targetDays`
 
 ## Future Features
 

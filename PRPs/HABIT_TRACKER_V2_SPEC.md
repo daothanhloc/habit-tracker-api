@@ -5,6 +5,10 @@ Reconstructed from the original product-spec conversation. This is the
 source of truth for domain rules; `HABIT_TRACKER_V2_SCHEMA_API.md` derives
 the Prisma schema and REST surface from it.
 
+> Revised 2026-10-17 (owner decision): a Goal only wraps habits and has no
+> progress of its own; habit progress counts only `DONE` tasks. Affected:
+> Goal entity, Habit `goalType`, the status/value note, worked example 3.
+
 ## Scope
 
 Clean slate on the tracking domain: **Goal → Habit → Task** replaces v1's
@@ -30,11 +34,8 @@ not listed under Entities below, it doesn't exist):
 - `title` — free text.
 - `period`: `startDate`, `endDate` — calendar window (e.g. "this month",
   "this week"). Plain dates, inclusive range.
-- `progress` (computed, not stored): unified sum shown **only if every
-  child habit shares the same unit**; otherwise each habit's progress is
-  shown independently (no single number — this is a UI/API contract, not
-  just a frontend choice, since the API must signal "no unified number"
-  rather than the client guessing).
+- A Goal only wraps its habits: it has no progress of its own. Each habit
+  carries its own progress and streak.
 
 ### Habit (belongs to exactly one Goal)
 - `name`
@@ -42,10 +43,11 @@ not listed under Entities below, it doesn't exist):
   label; does not change how progress or streak are computed.
 - `goalType`: `SUM` or `THRESHOLD_COUNT`
   - `SUM` → `targetValue` (e.g. 100km total over the period). Progress =
-    sum of task values across the period vs. `targetValue`.
+    sum of `value` over `DONE` tasks across the period (null counts as 0)
+    vs. `targetValue`.
   - `THRESHOLD_COUNT` → `dailyMinValue` (e.g. 8h) + `targetDays` (e.g. 30
-    days). A day **counts** toward progress if that day's task `value ≥
-    dailyMinValue`. Progress = count of qualifying days vs. `targetDays`.
+    days). A day **counts** toward progress if that day's task is `DONE` and its
+    `value ≥ dailyMinValue`. Progress = count of qualifying days vs. `targetDays`.
 - `frequencyDays` — specific days of week (e.g. Mon/Wed/Fri). Tasks are only
   generated on these days; other days are not "missed," they simply don't
   exist for this habit.
@@ -62,9 +64,8 @@ not listed under Entities below, it doesn't exist):
 - `completedAt` — set when `status` transitions to `done`, cleared on
   reversion.
 
-Note the independence between `status` and `value`: `status` (done/not_done)
-drives streak; `value` vs. threshold/sum target drives progress. These are
-separate axes by design — see `HABIT_TRACKER_V2_SCHEMA_API.md` §Known Gap
+Note the relationship between `status` and `value`: `status` drives streak;
+progress counts only `DONE` tasks, by their `value` — see `HABIT_TRACKER_V2_SCHEMA_API.md` §Known Gap
 for the edge case this creates.
 
 ## Streak Logic (per habit)
@@ -82,15 +83,15 @@ for the edge case this creates.
 
 1. **"Run 100km this month"** → Habit "Run" (`unit: km`, `goalType: SUM`,
    `targetValue: 100`, `frequencyDays: [Mon, Wed, Fri]`,
-   `defaultTaskValue: 5`). Each completed task's `value` sums toward 100;
+   `defaultTaskValue: 5`). Each `DONE` task's `value` sums toward 100;
    streak counts consecutive completed Mon/Wed/Fri occurrences only.
 2. **"Sleep better"** → Habit "Sleep" (`unit: hours`,
    `goalType: THRESHOLD_COUNT`, `dailyMinValue: 8`, `targetDays: 30`,
-   `frequencyDays: every day`). Progress counts how many days had
+   `frequencyDays: every day`). Progress counts how many `DONE` days had
    `value ≥ 8`, out of 30 needed — not a sum of hours slept.
 3. **"Get Fit" goal** with Habit "Run" (`km`) + Habit "Gym" (`sessions`) →
-   mixed units → `Goal.progress` is `null` (no unified number); API/UI show
-   two separate per-habit progress bars.
+   the Goal has no progress of its own; API/UI show two separate per-habit
+   progress bars (Run in km, Gym in sessions), each with its own streak.
 
 ## Open Questions Resolved
 

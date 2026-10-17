@@ -1,172 +1,247 @@
-import { PrismaClient, Frequency } from "@prisma/client";
-import { CreateHabitDto, UpdateHabitDto } from "../schemas/habit.schema";
+import { Habit as PrismaHabit, PrismaClient } from '@prisma/client';
+import { CreateHabitDto, UpdateHabitDto } from '../schemas/habit.schema.js';
+import { computeProgress } from './progress.util.js';
+import {
+  dayOfWeek,
+  formatDateOnly,
+  parseDateOnly,
+  vntTodayDateOnly,
+} from './date.util.js';
+import { NotFoundError } from './errors.js';
 
 export class HabitService {
   constructor(private prisma: PrismaClient) {}
 
-  private static readonly VNT_OFFSET_MS = 7 * 60 * 60 * 1000;
-  private static readonly MS_PER_DAY = 24 * 60 * 60 * 1000;
-
-  private getVntDayBounds(date: Date): { start: Date; end: Date } {
-    const vntMs = date.getTime() + HabitService.VNT_OFFSET_MS;
-    const startVntMs =
-      Math.floor(vntMs / HabitService.MS_PER_DAY) * HabitService.MS_PER_DAY;
-    const startUtcMs = startVntMs - HabitService.VNT_OFFSET_MS;
-
-    return {
-      start: new Date(startUtcMs),
-      end: new Date(startUtcMs + HabitService.MS_PER_DAY - 1),
-    };
-  }
-
-  private async isTrackedToday(habitId: string, userId: string): Promise<boolean> {
-    const now = new Date();
-    const { start: startOfDay, end: endOfDay } = this.getVntDayBounds(now);
-
-    const tracking = await this.prisma.habitTracking.findFirst({
-      where: {
-        habitId,
-        userId,
-        completedAt: {
-          gte: startOfDay,
-          lte: endOfDay,
-        },
-      },
+  async create(goalId: string, userId: string, data: CreateHabitDto) {
+    const goal = await this.prisma.goal.findFirst({
+      where: { id: goalId, userId },
     });
-
-    return !!tracking;
-  }
-
-  async create(userId: string, data: CreateHabitDto) {
-    const frequencyMap: Record<string, Frequency> = {
-      daily: "DAILY",
-      weekly: "WEEKLY",
-      monthly: "MONTHLY",
-    };
+    if (!goal) {
+      throw new NotFoundError('Goal not found');
+    }
 
     const habit = await this.prisma.habit.create({
       data: {
-        ...data,
+        goalId,
         userId,
-        frequency: frequencyMap[data.frequency || "daily"],
+        name: data.name,
+        unit: data.unit ?? null,
+        goalType: data.goalType === 'sum' ? 'SUM' : 'THRESHOLD_COUNT',
+        targetValue: data.goalType === 'sum' ? data.targetValue : null,
+        dailyMinValue:
+          data.goalType === 'threshold_count' ? data.dailyMinValue : null,
+        targetDays:
+          data.goalType === 'threshold_count' ? data.targetDays : null,
+        frequencyDays: data.frequencyDays,
+        defaultTaskValue: data.defaultTaskValue ?? null,
       },
     });
 
-    return {
-      ...habit,
-      trackedToday: false, // New habit can't be tracked yet
-    };
+    return this.toSummary(habit, { current: 0, target: this.targetFor(habit) });
   }
 
-  async findAll(userId: string, isActive?: boolean) {
-    const where: any = { userId };
-    if (isActive !== undefined) {
-      where.isActive = isActive;
-    }
-
+  // Habit summaries embedded in a Goal response, with progress computed
+  // over the goal's own period.
+  async listSummariesForGoal(goal: { id: string; startDate: Date; endDate: Date }) {
     const habits = await this.prisma.habit.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
+      where: { goalId: goal.id },
+      orderBy: { createdAt: 'asc' },
     });
 
-    // Calculate today's date boundaries
-    const now = new Date();
-    const { start: startOfDay, end: endOfDay } = this.getVntDayBounds(now);
-
-    // Query all today's tracking for this user
-    const todaysTracking = await this.prisma.habitTracking.findMany({
-      where: {
-        userId,
-        completedAt: {
-          gte: startOfDay,
-          lte: endOfDay,
-        },
-      },
-      select: {
-        habitId: true,
-      },
-    });
-
-    // Create Set of tracked habit IDs for O(1) lookup
-    const trackedHabitIds = new Set(
-      todaysTracking.map((tracking) => tracking.habitId)
+    return Promise.all(
+      habits.map((habit) => this.withProgress(habit, goal.startDate, goal.endDate))
     );
-
-    // Map habits and add trackedToday field
-    const habitsWithTracking = habits.map((habit) => ({
-      ...habit,
-      trackedToday: trackedHabitIds.has(habit.id),
-    }));
-
-    return habitsWithTracking;
   }
 
-  async findById(id: string) {
-    const habit = await this.prisma.habit.findUnique({
-      where: { id },
+  async findById(habitId: string, userId: string) {
+    const habit = await this.prisma.habit.findFirst({
+      where: { id: habitId, userId },
+      include: { goal: true },
     });
-
     if (!habit) {
       return null;
     }
 
-    const trackedToday = await this.isTrackedToday(habit.id, habit.userId);
+    const summary = await this.withProgress(
+      habit,
+      habit.goal.startDate,
+      habit.goal.endDate
+    );
 
     return {
-      ...habit,
-      trackedToday,
+      ...summary,
+      goalId: habit.goalId,
+      userId: habit.userId,
+      createdAt: habit.createdAt,
+      updatedAt: habit.updatedAt,
     };
   }
 
-  async update(id: string, data: UpdateHabitDto) {
-    const updateData: any = { ...data };
+  async update(habitId: string, userId: string, data: UpdateHabitDto) {
+    const existing = await this.prisma.habit.findFirst({
+      where: { id: habitId, userId },
+      include: { goal: true },
+    });
+    if (!existing) {
+      throw new NotFoundError('Habit not found');
+    }
 
-    // Convert frequency if provided
-    if (data.frequency) {
-      const frequencyMap: Record<string, Frequency> = {
-        daily: "DAILY",
-        weekly: "WEEKLY",
-        monthly: "MONTHLY",
-      };
-      updateData.frequency = frequencyMap[data.frequency];
+    const updateData: Record<string, unknown> = {};
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.unit !== undefined) updateData.unit = data.unit;
+    if (data.defaultTaskValue !== undefined) {
+      updateData.defaultTaskValue = data.defaultTaskValue;
+    }
+    if (data.goalType !== undefined) {
+      updateData.goalType = data.goalType === 'sum' ? 'SUM' : 'THRESHOLD_COUNT';
+    }
+    if (data.targetValue !== undefined) updateData.targetValue = data.targetValue;
+    if (data.dailyMinValue !== undefined) {
+      updateData.dailyMinValue = data.dailyMinValue;
+    }
+    if (data.targetDays !== undefined) updateData.targetDays = data.targetDays;
+
+    const frequencyChanged =
+      data.frequencyDays !== undefined &&
+      JSON.stringify([...data.frequencyDays].sort()) !==
+        JSON.stringify([...existing.frequencyDays].sort());
+    if (data.frequencyDays !== undefined) {
+      updateData.frequencyDays = data.frequencyDays;
     }
 
     const habit = await this.prisma.habit.update({
-      where: { id },
+      where: { id: habitId },
       data: updateData,
     });
 
-    const trackedToday = await this.isTrackedToday(habit.id, habit.userId);
+    if (frequencyChanged) {
+      // Side effect per PRPs/HABIT_TRACKER_V2_SCHEMA_API.md section 6:
+      // drop NOT_DONE tasks so they regenerate lazily under the new
+      // schedule. DONE tasks are completed history and are never touched.
+      await this.prisma.task.deleteMany({
+        where: { habitId, status: 'NOT_DONE' },
+      });
+      await this.recomputeStreak(habitId);
+    }
+
+    const summary = await this.withProgress(
+      habit,
+      existing.goal.startDate,
+      existing.goal.endDate
+    );
 
     return {
-      ...habit,
-      trackedToday,
+      ...summary,
+      goalId: habit.goalId,
+      userId: habit.userId,
+      createdAt: habit.createdAt,
+      updatedAt: habit.updatedAt,
     };
   }
 
-  async delete(id: string) {
-    return await this.prisma.habit.delete({
-      where: { id },
+  async delete(habitId: string, userId: string) {
+    const existing = await this.prisma.habit.findFirst({
+      where: { id: habitId, userId },
+    });
+    if (!existing) {
+      throw new NotFoundError('Habit not found');
+    }
+    await this.prisma.habit.delete({ where: { id: habitId } });
+  }
+
+  // Recomputes currentStreak/longestStreak per
+  // PRPs/HABIT_TRACKER_V2_SCHEMA_API.md section 5: walk scheduled dates
+  // backwards from server-side today; a scheduled day before today with no
+  // DONE task breaks the run, today itself stays "intact" either way.
+  async recomputeStreak(habitId: string) {
+    const habit = await this.prisma.habit.findUnique({
+      where: { id: habitId },
+      include: { goal: true },
+    });
+    if (!habit) {
+      return;
+    }
+
+    const today = vntTodayDateOnly();
+    const startBound = formatDateOnly(habit.goal.startDate);
+
+    const tasks = await this.prisma.task.findMany({
+      where: {
+        habitId,
+        date: { gte: habit.goal.startDate, lte: parseDateOnly(today) },
+      },
+      select: { date: true, status: true },
+    });
+    const statusByDate = new Map(
+      tasks.map((t) => [formatDateOnly(t.date), t.status])
+    );
+
+    let currentStreak = 0;
+    let cursor = today;
+    let isToday = true;
+    while (cursor >= startBound) {
+      if (habit.frequencyDays.includes(dayOfWeek(cursor))) {
+        const status = statusByDate.get(cursor) ?? 'NOT_DONE';
+        if (status === 'DONE') {
+          currentStreak += 1;
+        } else if (!isToday) {
+          // A scheduled, non-today date with no completion breaks the run.
+          break;
+        }
+        // Today's own incomplete task does not break the streak yet.
+      }
+      isToday = false;
+      cursor = formatDateOnly(new Date(parseDateOnly(cursor).getTime() - 86400000));
+    }
+
+    const longestStreak = Math.max(habit.longestStreak, currentStreak);
+
+    await this.prisma.habit.update({
+      where: { id: habitId },
+      data: { currentStreak, longestStreak },
     });
   }
 
-  async findByIdAndUserId(id: string, userId: string) {
-    const habit = await this.prisma.habit.findFirst({
-      where: {
-        id,
-        userId,
-      },
+  private async withProgress(habit: PrismaHabit, startDate: Date, endDate: Date) {
+    const tasks = await this.prisma.task.findMany({
+      where: { habitId: habit.id, date: { gte: startDate, lte: endDate } },
+      select: { value: true },
     });
 
-    if (!habit) {
-      return null;
-    }
+    const progress = computeProgress(
+      habit.goalType,
+      habit.targetValue,
+      habit.dailyMinValue,
+      habit.targetDays,
+      tasks
+    );
 
-    const trackedToday = await this.isTrackedToday(habit.id, userId);
+    return this.toSummary(habit, progress);
+  }
 
+  private targetFor(habit: PrismaHabit): number {
+    return habit.goalType === 'SUM'
+      ? habit.targetValue ?? 0
+      : habit.targetDays ?? 0;
+  }
+
+  private toSummary(
+    habit: PrismaHabit,
+    progress: { current: number; target: number }
+  ) {
     return {
-      ...habit,
-      trackedToday,
+      id: habit.id,
+      name: habit.name,
+      unit: habit.unit,
+      goalType: habit.goalType,
+      targetValue: habit.targetValue,
+      dailyMinValue: habit.dailyMinValue,
+      targetDays: habit.targetDays,
+      frequencyDays: habit.frequencyDays,
+      defaultTaskValue: habit.defaultTaskValue,
+      progress,
+      currentStreak: habit.currentStreak,
+      longestStreak: habit.longestStreak,
     };
   }
 }

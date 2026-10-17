@@ -1,47 +1,48 @@
 import { Type, Static } from '@sinclair/typebox';
+import { HabitSummarySchema } from './habit.schema.js';
 
-// Goal type enumeration for INPUT (what users send - lowercase)
-export const GoalTypeEnum = Type.Union([
-  Type.Literal('weekly'),
-  Type.Literal('monthly'),
-  Type.Literal('yearly'),
-]);
+// Progress is computed on read, never stored directly
+export const ProgressSchema = Type.Object({
+  current: Type.Number(),
+  target: Type.Number(),
+});
 
-// Goal type enumeration for OUTPUT (what Prisma returns - uppercase)
-export const GoalTypeEnumResponse = Type.Union([
-  Type.Literal('WEEKLY'),
-  Type.Literal('MONTHLY'),
-  Type.Literal('YEARLY'),
-]);
+export type Progress = Static<typeof ProgressSchema>;
 
-// Habit goal schema - represents a consistency goal for a habit
-export const HabitGoalSchema = Type.Object({
+// Main Goal schema - represents a Goal with its habits and derived progress
+export const GoalSchema = Type.Object({
   id: Type.String({ format: 'uuid' }),
-  habitId: Type.String({ format: 'uuid' }),
   userId: Type.String({ format: 'uuid' }),
-  targetFrequency: Type.Number({ minimum: 1 }),
-  goalType: GoalTypeEnumResponse,
+  title: Type.String({ minLength: 1, maxLength: 255 }),
+  startDate: Type.String({ format: 'date' }),
+  endDate: Type.String({ format: 'date' }),
+  // null when habits don't share a common unit - see
+  // PRPs/HABIT_TRACKER_V2_SCHEMA_API.md section 4
+  unifiedProgress: Type.Union([ProgressSchema, Type.Null()]),
+  habits: Type.Array(HabitSummarySchema),
   createdAt: Type.String({ format: 'date-time' }),
   updatedAt: Type.String({ format: 'date-time' }),
 });
 
-export type HabitGoal = Static<typeof HabitGoalSchema>;
+export type Goal = Static<typeof GoalSchema>;
 
-// Create goal DTO
-export const CreateHabitGoalSchema = Type.Object({
-  targetFrequency: Type.Number({ minimum: 1 }),
-  goalType: GoalTypeEnum,
+// Create DTO
+export const CreateGoalSchema = Type.Object({
+  title: Type.String({ minLength: 1, maxLength: 255 }),
+  startDate: Type.String({ format: 'date' }),
+  endDate: Type.String({ format: 'date' }),
 });
 
-export type CreateHabitGoalDto = Static<typeof CreateHabitGoalSchema>;
+export type CreateGoalDto = Static<typeof CreateGoalSchema>;
 
-// Update goal DTO
-export const UpdateHabitGoalSchema = Type.Partial(CreateHabitGoalSchema);
+// Update DTO - all fields optional
+export const UpdateGoalSchema = Type.Partial(CreateGoalSchema);
 
-export type UpdateHabitGoalDto = Static<typeof UpdateHabitGoalSchema>;
+export type UpdateGoalDto = Static<typeof UpdateGoalSchema>;
 
 // Path parameters
 export const GoalParamsSchema = Type.Object({
-  habitId: Type.String({ format: 'uuid' }),
-  goalId: Type.Optional(Type.String({ format: 'uuid' })),
+  goalId: Type.String({ format: 'uuid' }),
 });
+
+export type GoalParams = Static<typeof GoalParamsSchema>;

@@ -2,113 +2,98 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
+function dateOnly(daysAgo: number): Date {
+  const d = new Date();
+  d.setUTCHours(0, 0, 0, 0);
+  d.setUTCDate(d.getUTCDate() - daysAgo);
+  return d;
+}
+
 async function main() {
   console.log("🌱 Starting database seed...\n");
 
-  // Create or find test user
   const user = await prisma.user.upsert({
     where: { email: "test@example.com" },
     update: {},
     create: {
       email: "test@example.com",
       name: "Test User",
+      password: "seed-only-not-a-real-hash",
     },
   });
 
-  console.log(`✅ User created/found:`, user);
+  console.log(`✅ User created/found:`, user.email);
 
-  // Create sample habits
-  const habit1 = await prisma.habit.upsert({
-    where: { userId_name: { userId: user.id, name: "Morning Exercise" } },
-    update: {},
-    create: {
+  const today = dateOnly(0);
+  const monthStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
+  const monthEnd = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 0));
+
+  const goal = await prisma.goal.create({
+    data: {
       userId: user.id,
-      name: "Morning Exercise",
-      description: "30 min workout at the gym",
-      frequency: "DAILY",
-      category: "health",
-      color: "#3B82F6",
+      title: "Get Fit",
+      startDate: monthStart,
+      endDate: monthEnd,
     },
   });
 
-  console.log(`✅ Habit 1 created/found:`, habit1);
+  console.log(`✅ Goal created:`, goal.title);
 
-  const habit2 = await prisma.habit.upsert({
-    where: { userId_name: { userId: user.id, name: "Read" } },
-    update: {},
-    create: {
+  // SUM habit: "Run 100km this month"
+  const runHabit = await prisma.habit.create({
+    data: {
+      goalId: goal.id,
       userId: user.id,
-      name: "Read",
-      description: "30 pages or 1 hour",
-      frequency: "DAILY",
-      category: "learning",
-      color: "#10B981",
+      name: "Run",
+      unit: "km",
+      goalType: "SUM",
+      targetValue: 100,
+      frequencyDays: [1, 3, 5], // Mon/Wed/Fri
+      defaultTaskValue: 5,
     },
   });
 
-  console.log(`✅ Habit 2 created/found:`, habit2);
-
-  const habit3 = await prisma.habit.upsert({
-    where: { userId_name: { userId: user.id, name: "Meditate" } },
-    update: {},
-    create: {
+  // THRESHOLD_COUNT habit: "Sleep 8h, 30 days"
+  const sleepHabit = await prisma.habit.create({
+    data: {
+      goalId: goal.id,
       userId: user.id,
-      name: "Meditate",
-      description: "10-15 min meditation",
-      frequency: "DAILY",
-      category: "wellness",
-      color: "#8B5CF6",
+      name: "Sleep",
+      unit: "hours",
+      goalType: "THRESHOLD_COUNT",
+      dailyMinValue: 8,
+      targetDays: 30,
+      frequencyDays: [0, 1, 2, 3, 4, 5, 6], // every day
+      defaultTaskValue: 8,
     },
   });
 
-  console.log(`✅ Habit 3 created/found:`, habit3);
+  console.log(`✅ Habits created:`, runHabit.name, sleepHabit.name);
 
-  // Create sample goal
-  const goal = await prisma.habitGoal.upsert({
-    where: { habitId_goalType: { habitId: habit1.id, goalType: "WEEKLY" } },
-    update: {},
-    create: {
-      habitId: habit1.id,
-      userId: user.id,
-      targetFrequency: 5,
-      goalType: "WEEKLY",
-    },
-  });
-
-  console.log(`✅ Goal created/found:`, goal);
-
-  // Create sample tracking records
-  const today = new Date();
+  // A few days of sample tasks for the Run habit (completed, done)
   for (let i = 0; i < 3; i++) {
-    const date = new Date(today);
-    date.setDate(date.getDate() - i);
-    date.setHours(18, 30, 0, 0);
-
-    const tracking = await prisma.habitTracking.upsert({
-      where: { habitId_completedAt: { habitId: habit1.id, completedAt: date } },
+    const date = dateOnly(i);
+    await prisma.task.upsert({
+      where: { habitId_date: { habitId: runHabit.id, date } },
       update: {},
       create: {
-        habitId: habit1.id,
-        userId: user.id,
-        completedAt: date,
-        notes: `Great workout! Completed on ${date.toLocaleDateString()}`,
-        streak: 3 - i,
+        habitId: runHabit.id,
+        date,
+        value: 5,
+        status: "DONE",
+        completedAt: new Date(),
       },
     });
-
-    console.log(
-      `✅ Tracking record created/found for ${date.toLocaleDateString()}:`,
-      tracking.id
-    );
   }
+  await prisma.habit.update({
+    where: { id: runHabit.id },
+    data: { currentStreak: 3, longestStreak: 3 },
+  });
 
   console.log("\n✅ Database seeding completed successfully!");
   console.log(`\n📝 Test User Details:`);
   console.log(`   Email: ${user.email}`);
   console.log(`   ID: ${user.id}`);
-  console.log(
-    `\n💡 Use this user ID in the routes (or update the hardcoded cmjpxvspj0000wavckybybye3)`
-  );
 }
 
 main()

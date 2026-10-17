@@ -20,88 +20,97 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  goals         Goal[]
   habits        Habit[]
-  goals         HabitGoal[]
-  tracking      HabitTracking[]
   refreshTokens RefreshToken[]
 
   @@index([email])
 }
 
-// Habit - core domain entity representing a habit to track
-model Habit {
-  id          String  @id @default(uuid())
-  userId      String
-  name        String  @db.VarChar(255)
-  description String?
-  frequency   Frequency @default(DAILY)
-  category    String?
-  isActive    Boolean @default(true)
-  color       String? @default("#3B82F6")
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  user     User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tracking HabitTracking[]
-  goals    HabitGoal[]
-
-  @@unique([userId, name])
-  @@index([userId])
-  @@index([userId, isActive])
-}
-
-// Frequency enum for habits (daily, weekly, monthly)
-enum Frequency {
-  DAILY
-  WEEKLY
-  MONTHLY
-}
-
-// HabitTracking - records when user completes a habit
-model HabitTracking {
-  id        String @id @default(uuid())
-  habitId   String
+// Goal - a calendar-bound objective made up of one or more Habits
+model Goal {
+  id        String   @id @default(uuid())
   userId    String
-
-  completedAt DateTime
-  notes       String?
-  streak      Int      @default(1)
+  title     String   @db.VarChar(255)
+  startDate DateTime @db.Date
+  endDate   DateTime @db.Date
 
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  habit Habit @relation(fields: [habitId], references: [id], onDelete: Cascade)
-  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  habits Habit[]
 
-  @@unique([habitId, completedAt])
-  @@index([habitId, completedAt])
-  @@index([userId, completedAt])
+  @@index([userId])
 }
 
-// HabitGoal - consistency targets for habits
-model HabitGoal {
-  id                String @id @default(uuid())
-  habitId           String
-  userId            String
+// HabitGoalType - how a habit's progress is measured over its goal period
+enum HabitGoalType {
+  SUM
+  THRESHOLD_COUNT
+}
 
-  targetFrequency Int
-  goalType        GoalType @default(WEEKLY)
+// Habit - belongs to exactly one Goal; defines how often and how much
+model Habit {
+  id     String @id @default(uuid())
+  goalId String
+  userId String
+
+  name     String        @db.VarChar(255)
+  unit     String?
+  goalType HabitGoalType
+
+  // SUM: total target over the goal period
+  targetValue Float?
+
+  // THRESHOLD_COUNT: a day counts if its task value >= dailyMinValue;
+  // targetDays is how many qualifying days are needed
+  dailyMinValue Float?
+  targetDays    Int?
+
+  // Specific days of week this habit is scheduled on: 0=Sun..6=Sat
+  frequencyDays Int[]
+
+  // Pre-fills new tasks' value; editable per task afterwards
+  defaultTaskValue Float?
+
+  currentStreak Int @default(0)
+  longestStreak Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  goal  Goal   @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tasks Task[]
+
+  @@index([goalId])
+  @@index([userId])
+}
+
+// TaskStatus - completion state of a single day's Task
+enum TaskStatus {
+  DONE
+  NOT_DONE
+}
+
+// Task - one scheduled day's instance of a Habit, lazily created on first read
+model Task {
+  id      String @id @default(uuid())
+  habitId String
+
+  date        DateTime   @db.Date
+  value       Float?
+  status      TaskStatus @default(NOT_DONE)
+  completedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   habit Habit @relation(fields: [habitId], references: [id], onDelete: Cascade)
-  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([habitId, goalType])
-  @@index([userId])
-}
-
-// Goal type enum (weekly, monthly, yearly)
-enum GoalType {
-  WEEKLY
-  MONTHLY
-  YEARLY
+  @@unique([habitId, date])
+  @@index([habitId, date])
 }
 
 // RefreshToken - for token revocation capability

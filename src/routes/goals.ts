@@ -1,212 +1,162 @@
-import { FastifyInstance, FastifyPluginAsync } from "fastify";
-import { Static } from "@sinclair/typebox";
+import { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import { Static } from '@sinclair/typebox';
 import {
-  HabitGoalSchema,
-  CreateHabitGoalSchema,
-  UpdateHabitGoalSchema,
+  GoalSchema,
+  CreateGoalSchema,
+  UpdateGoalSchema,
   GoalParamsSchema,
-  type CreateHabitGoalDto,
-  type UpdateHabitGoalDto,
-} from "../schemas/goal.schema.js";
-import { GoalService } from "../services/goal.service.js";
+  type CreateGoalDto,
+  type UpdateGoalDto,
+} from '../schemas/goal.schema.js';
+import { GoalService } from '../services/goal.service.js';
+import { HabitService } from '../services/habit.service.js';
+import { NotFoundError } from '../services/errors.js';
 
-// Goal routes - habit goal and consistency tracking
+// Goal routes - CRUD for the top-level Goal entity. Registered at prefix
+// '/goals'. See PRPs/HABIT_TRACKER_V2_SCHEMA_API.md section 6.
 const goalRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
-  const goalService = new GoalService(fastify.prisma);
+  const habitService = new HabitService(fastify.prisma);
+  const goalService = new GoalService(fastify.prisma, habitService);
 
-  // POST /habits/:habitId/goals - Create goal
-  fastify.post<{
-    Params: Static<typeof GoalParamsSchema>;
-    Body: CreateHabitGoalDto;
-    Reply: Static<typeof HabitGoalSchema>;
-  }>(
-    "/:habitId/goals",
+  // POST /goals - Create a new goal
+  fastify.post<{ Body: CreateGoalDto; Reply: Static<typeof GoalSchema> }>(
+    '/',
     {
       onRequest: [fastify.authenticate],
       schema: {
         tags: ['Goals'],
         security: [{ bearerAuth: [] }],
-        summary: "Create a habit goal",
-        description:
-          "Sets a consistency goal for a habit (weekly, monthly, yearly)",
-        params: GoalParamsSchema,
-        body: CreateHabitGoalSchema,
+        summary: 'Create a new goal',
+        description: 'Creates a new goal with a title and calendar period',
+        body: CreateGoalSchema,
         response: {
-          201: HabitGoalSchema,
-          400: { description: "Invalid input" },
-          404: { description: "Habit not found" },
+          201: GoalSchema,
+          400: { description: 'Invalid input' },
         },
       } as any,
     },
     async (request, reply) => {
       const userId = request.user.userId;
-
-      try {
-        const goal = await goalService.create(
-          request.params.habitId,
-          userId,
-          request.body
-        );
-        return reply.code(201).send(goal as any);
-      } catch (error: any) {
-        if (error.code === "P2025") {
-          return reply.code(404).send({
-            message: "Habit not found",
-          } as any);
-        }
-        if (error.code === "P2002") {
-          return reply.code(400).send({
-            message: "Goal for this type already exists",
-          } as any);
-        }
-        throw error;
-      }
+      const goal = await goalService.create(userId, request.body);
+      return reply.code(201).send(goal as any);
     }
   );
 
-  // GET /habits/:habitId/goals - Get all goals for habit
-  fastify.get<{
-    Params: Static<typeof GoalParamsSchema>;
-    Reply: Static<typeof HabitGoalSchema>[];
-  }>(
-    "/:habitId/goals",
+  // GET /goals - List all goals for the current user
+  fastify.get<{ Reply: Static<typeof GoalSchema>[] }>(
+    '/',
     {
       onRequest: [fastify.authenticate],
       schema: {
         tags: ['Goals'],
         security: [{ bearerAuth: [] }],
-        summary: "Get all goals for a habit",
-        description: "Retrieves all consistency goals for a habit",
-        params: GoalParamsSchema,
+        summary: 'List goals',
+        description: 'Returns all goals for the current user, with habits and progress',
         response: {
-          200: { type: "array", items: HabitGoalSchema },
+          200: { type: 'array', items: GoalSchema },
         },
       } as any,
     },
     async (request, reply) => {
-      const goals = await goalService.findByHabitId(request.params.habitId);
+      const userId = request.user.userId;
+      const goals = await goalService.findAll(userId);
       return reply.send(goals as any);
     }
   );
 
-  // GET /habits/:habitId/goals/:goalId - Get goal progress
+  // GET /goals/:goalId - Get a single goal
   fastify.get<{
     Params: Static<typeof GoalParamsSchema>;
-    Reply: {
-      goal: Static<typeof HabitGoalSchema>;
-      completions: number;
-      targetFrequency: number;
-      percentage: number;
-    };
+    Reply: Static<typeof GoalSchema>;
   }>(
-    "/:habitId/goals/:goalId",
+    '/:goalId',
     {
       onRequest: [fastify.authenticate],
       schema: {
         tags: ['Goals'],
         security: [{ bearerAuth: [] }],
-        summary: "Get goal progress",
-        description:
-          "Retrieves progress towards a specific goal (completions vs target)",
+        summary: 'Get a goal by ID',
         params: GoalParamsSchema,
         response: {
-          200: {
-            type: "object",
-            properties: {
-              goal: HabitGoalSchema,
-              completions: { type: "number" },
-              targetFrequency: { type: "number" },
-              percentage: { type: "number" },
-            },
-          },
-          404: { description: "Goal not found" },
+          200: GoalSchema,
+          404: { description: 'Goal not found' },
         },
       } as any,
     },
     async (request, reply) => {
-      const goal = await goalService.getProgress(
-        request.params.habitId,
-        (request.params.goalId as string) || (request.query as any).toString()
-      );
-
+      const userId = request.user.userId;
+      const goal = await goalService.findById(request.params.goalId, userId);
       if (!goal) {
-        return reply.code(404).send({
-          message: "Goal not found",
-        } as any);
+        return reply.code(404).send({ message: 'Goal not found' } as any);
       }
-
       return reply.send(goal as any);
     }
   );
 
-  // PUT /habits/:habitId/goals/:goalId - Update goal
+  // PUT /goals/:goalId - Update a goal
   fastify.put<{
     Params: Static<typeof GoalParamsSchema>;
-    Body: UpdateHabitGoalDto;
-    Reply: Static<typeof HabitGoalSchema>;
+    Body: UpdateGoalDto;
+    Reply: Static<typeof GoalSchema>;
   }>(
-    "/:habitId/goals/:goalId",
+    '/:goalId',
     {
       onRequest: [fastify.authenticate],
       schema: {
         tags: ['Goals'],
         security: [{ bearerAuth: [] }],
-        summary: "Update a goal",
-        description: "Updates the target frequency or goal type",
+        summary: 'Update a goal',
         params: GoalParamsSchema,
-        body: UpdateHabitGoalSchema,
+        body: UpdateGoalSchema,
         response: {
-          200: HabitGoalSchema,
-          404: { description: "Goal not found" },
+          200: GoalSchema,
+          404: { description: 'Goal not found' },
         },
       } as any,
     },
     async (request, reply) => {
+      const userId = request.user.userId;
       try {
         const goal = await goalService.update(
-          request.params.goalId!,
+          request.params.goalId,
+          userId,
           request.body
         );
         return reply.send(goal as any);
-      } catch (error: any) {
-        if (error.code === "P2025") {
-          return reply.code(404).send({
-            message: "Goal not found",
-          } as any);
+      } catch (error) {
+        if (error instanceof NotFoundError) {
+          return reply.code(404).send({ message: error.message } as any);
         }
         throw error;
       }
     }
   );
 
-  // DELETE /habits/:habitId/goals/:goalId - Delete goal
-  fastify.delete<{
-    Params: Static<typeof GoalParamsSchema>;
-  }>(
-    "/:habitId/goals/:goalId",
+  // DELETE /goals/:goalId - Delete a goal (cascades to its habits and tasks)
+  fastify.delete<{ Params: Static<typeof GoalParamsSchema> }>(
+    '/:goalId',
     {
       onRequest: [fastify.authenticate],
       schema: {
         tags: ['Goals'],
         security: [{ bearerAuth: [] }],
-        summary: "Delete a goal",
-        description: "Removes a goal from a habit",
+        summary: 'Delete a goal',
+        description: 'Deletes a goal and cascades to all of its habits and tasks',
         params: GoalParamsSchema,
         response: {
-          204: { description: "Goal deleted successfully" },
-          404: { description: "Goal not found" },
+          204: { description: 'Goal deleted successfully' },
+          404: { description: 'Goal not found' },
         },
       } as any,
     },
     async (request, reply) => {
+      const userId = request.user.userId;
       try {
-        await goalService.delete(request.params.goalId!);
+        await goalService.delete(request.params.goalId, userId);
         return reply.code(204).send();
-      } catch (error: any) {
-        if (error.code === "P2025") {
-          return reply.code(404).send({
-            message: "Goal not found",
-          } as any);
+      } catch (error) {
+        if (error instanceof NotFoundError) {
+          return reply.code(404).send({ message: error.message } as any);
         }
         throw error;
       }

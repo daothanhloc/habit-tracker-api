@@ -1,116 +1,123 @@
-import { PrismaClient, GoalType } from '@prisma/client';
-import { CreateHabitGoalDto, UpdateHabitGoalDto } from '../schemas/goal.schema.js';
+import { Goal as PrismaGoal, PrismaClient } from '@prisma/client';
+import { CreateGoalDto, UpdateGoalDto } from '../schemas/goal.schema.js';
+import { HabitSummary } from '../schemas/habit.schema.js';
+import { HabitService } from './habit.service.js';
+import { formatDateOnly, parseDateOnly } from './date.util.js';
+import { NotFoundError } from './errors.js';
 
 export class GoalService {
-  constructor(private prisma: PrismaClient) {}
+  constructor(
+    private prisma: PrismaClient,
+    private habitService: HabitService
+  ) {}
 
-  async create(habitId: string, userId: string, data: CreateHabitGoalDto) {
-    const goalTypeMap: Record<string, GoalType> = {
-      weekly: 'WEEKLY',
-      monthly: 'MONTHLY',
-      yearly: 'YEARLY',
-    };
-
-    return await this.prisma.habitGoal.create({
+  async create(userId: string, data: CreateGoalDto) {
+    const goal = await this.prisma.goal.create({
       data: {
-        habitId,
         userId,
-        targetFrequency: data.targetFrequency,
-        goalType: goalTypeMap[data.goalType],
+        title: data.title,
+        startDate: parseDateOnly(data.startDate),
+        endDate: parseDateOnly(data.endDate),
       },
     });
+    return this.toResponse(goal, []);
   }
 
-  async findByHabitId(habitId: string) {
-    return await this.prisma.habitGoal.findMany({
-      where: { habitId },
+  async findAll(userId: string) {
+    const goals = await this.prisma.goal.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
     });
+    return Promise.all(goals.map((goal) => this.withHabits(goal)));
   }
 
-  async findByHabitAndGoalType(habitId: string, goalType: string) {
-    const goalTypeMap: Record<string, GoalType> = {
-      weekly: 'WEEKLY',
-      monthly: 'MONTHLY',
-      yearly: 'YEARLY',
-    };
-
-    return await this.prisma.habitGoal.findFirst({
-      where: {
-        habitId,
-        goalType: goalTypeMap[goalType.toLowerCase()],
-      },
+  async findById(goalId: string, userId: string) {
+    const goal = await this.prisma.goal.findFirst({
+      where: { id: goalId, userId },
     });
-  }
-
-  async update(id: string, data: UpdateHabitGoalDto) {
-    const updateData: any = { ...data };
-
-    // Convert goalType if provided
-    if (data.goalType) {
-      const goalTypeMap: Record<string, GoalType> = {
-        weekly: 'WEEKLY',
-        monthly: 'MONTHLY',
-        yearly: 'YEARLY',
-      };
-      updateData.goalType = goalTypeMap[data.goalType];
-    }
-
-    return await this.prisma.habitGoal.update({
-      where: { id },
-      data: updateData,
-    });
-  }
-
-  async delete(id: string) {
-    return await this.prisma.habitGoal.delete({
-      where: { id },
-    });
-  }
-
-  async getProgress(habitId: string, goalType: string) {
-    const goal = await this.findByHabitAndGoalType(habitId, goalType);
-
     if (!goal) {
       return null;
     }
+    return this.withHabits(goal);
+  }
 
-    // Calculate period based on goalType
-    const now = new Date();
-    let periodStart: Date;
-
-    if (goalType === 'weekly') {
-      // Get start of week (Monday)
-      const dayOfWeek = now.getDay();
-      const daysDiff = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-      periodStart = new Date(now);
-      periodStart.setDate(now.getDate() - daysDiff);
-    } else if (goalType === 'monthly') {
-      periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    } else {
-      // yearly
-      periodStart = new Date(now.getFullYear(), 0, 1);
+  async update(goalId: string, userId: string, data: UpdateGoalDto) {
+    const existing = await this.prisma.goal.findFirst({
+      where: { id: goalId, userId },
+    });
+    if (!existing) {
+      throw new NotFoundError('Goal not found');
     }
 
-    // Count completions in period
-    const completions = await this.prisma.habitTracking.count({
-      where: {
-        habitId,
-        completedAt: {
-          gte: periodStart,
-          lte: now,
-        },
-      },
+    const updateData: Record<string, unknown> = {};
+    if (data.title !== undefined) updateData.title = data.title;
+    if (data.startDate !== undefined) {
+      updateData.startDate = parseDateOnly(data.startDate);
+    }
+    if (data.endDate !== undefined) {
+      updateData.endDate = parseDateOnly(data.endDate);
+    }
+
+    const goal = await this.prisma.goal.update({
+      where: { id: goalId },
+      data: updateData,
     });
+    return this.withHabits(goal);
+  }
 
-    const percentage = Math.round(
-      (completions / goal.targetFrequency) * 100,
-    );
+  async delete(goalId: string, userId: string) {
+    const existing = await this.prisma.goal.findFirst({
+      where: { id: goalId, userId },
+    });
+    if (!existing) {
+      throw new NotFoundError('Goal not found');
+    }
+    await this.prisma.goal.delete({ where: { id: goalId } });
+  }
 
+  private async withHabits(goal: PrismaGoal) {
+    const habits = await this.habitService.listSummariesForGoal(goal);
+    return this.toResponse(goal, habits);
+  }
+
+  private toResponse(goal: PrismaGoal, habits: HabitSummary[]) {
     return {
-      goal,
-      completions,
-      targetFrequency: goal.targetFrequency,
-      percentage: Math.min(percentage, 100), // Cap at 100%
+      id: goal.id,
+      userId: goal.userId,
+      title: goal.title,
+      startDate: formatDateOnly(goal.startDate),
+      endDate: formatDateOnly(goal.endDate),
+      unifiedProgress: this.computeUnifiedProgress(habits),
+      habits,
+      createdAt: goal.createdAt,
+      updatedAt: goal.updatedAt,
     };
+  }
+
+  // Unified only when every habit has the same non-null unit - see
+  // PRPs/HABIT_TRACKER_V2_SCHEMA_API.md section 4. Habits with different
+  // goalTypes (SUM vs THRESHOLD_COUNT) sharing a unit are summed as-is;
+  // the spec's worked examples only exercise the mixed-unit case, so this
+  // edge case (same unit, different goalType) is an open assumption, not a
+  // confirmed rule.
+  private computeUnifiedProgress(habits: HabitSummary[]) {
+    if (habits.length === 0) {
+      return null;
+    }
+    const unit = habits[0].unit;
+    if (unit === null) {
+      return null;
+    }
+    const allSameUnit = habits.every((h) => h.unit === unit);
+    if (!allSameUnit) {
+      return null;
+    }
+    return habits.reduce(
+      (acc, h) => ({
+        current: acc.current + h.progress.current,
+        target: acc.target + h.progress.target,
+      }),
+      { current: 0, target: 0 }
+    );
   }
 }

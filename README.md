@@ -117,7 +117,7 @@ Hierarchy: **Goal → Habit → Task**. A habit is always created *under* a goal
 | POST | `/auth/refresh` | Body `{ refreshToken }` → new tokens |
 | POST | `/auth/logout` | Body `{ refreshToken }` → 204 |
 | POST | `/goals` | Create goal (`title`, `startDate`, `endDate` as `YYYY-MM-DD`) |
-| GET | `/goals` | List goals with habit summaries and progress |
+| GET | `/goals` | List goals with their habits |
 | GET | `/goals/:goalId` | Get one goal |
 | PUT | `/goals/:goalId` | Update goal (all fields optional) |
 | DELETE | `/goals/:goalId` | Delete goal; cascades to habits and tasks (204) |
@@ -289,8 +289,8 @@ Full design: `PRPs/HABIT_TRACKER_V2_SCHEMA_API.md`.
 
 ## Goal Types
 
-- `sum`: progress is the total of task values over the goal period, against `targetValue`
-- `threshold_count`: progress is the number of days with task value ≥ `dailyMinValue`, against `targetDays`
+- `sum`: progress is computed over DONE tasks: the total of the values of DONE tasks, against `targetValue`
+- `threshold_count`: progress is computed over DONE tasks: the number of DONE tasks whose value >= `dailyMinValue`, against `targetDays`
 
 ## Future Features
 

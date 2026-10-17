@@ -4,9 +4,9 @@ interface TaskValueLike {
   value: number | null;
 }
 
-// Progress is driven by task `value`, independent of task `status` (which
-// drives streak instead). See PRPs/HABIT_TRACKER_V2_SCHEMA_API.md section 4
-// and section 8 for why these are intentionally separate axes.
+// Callers pass only DONE tasks (see HabitService.progressFor); this sums
+// `value` / counts `value >= dailyMinValue` over whatever it is given.
+// See PRPs/HABIT_TRACKER_V2_SCHEMA_API.md section 4 and section 8.
 export function computeProgress(
   goalType: HabitGoalType,
   targetValue: number | null,

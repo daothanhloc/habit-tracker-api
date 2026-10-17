@@ -130,19 +130,16 @@ needed (see `HABIT_TRACKER_V2_SPEC.md` consumer notes).
 Computed on read, not stored (except `currentStreak`/`longestStreak`, which
 *are* persisted on `Habit` and recomputed on every task mutation).
 
-- **`SUM`**: `current = Σ task.value` over all tasks in `[goal.startDate,
-  goal.endDate]` (null `value` treated as 0, regardless of `status`).
+- **`SUM`**: `current = Σ task.value` over tasks with `status = DONE` in
+  `[goal.startDate, goal.endDate]` (null `value` treated as 0).
   `target = habit.targetValue`.
-- **`THRESHOLD_COUNT`**: `current = count of tasks where value ≥
-  dailyMinValue` over the period (regardless of `status`). `target =
-  habit.targetDays`.
-- Progress is driven by `value`, independent of `status`. This is
-  intentional (see §8 Known Gap) — don't special-case it away.
-- **`Goal.unifiedProgress`**: if every habit under the goal has the same
-  non-null `unit`, sum each habit's `current`/`target` into one
-  `{current, target}`. If units differ (or any habit has `unit: null`),
-  `unifiedProgress` is `null` and the API returns each habit's progress
-  independently — this is a server-side decision, not left to the client.
+- **`THRESHOLD_COUNT`**: `current = count of tasks where status = DONE and
+  value ≥ dailyMinValue` over the period. `target = habit.targetDays`.
+- Only `DONE` tasks count toward progress: lazily created `NOT_DONE` rows
+  (pre-filled with `defaultTaskValue`) never inflate it. Un-marking a task
+  removes its value from progress.
+- Goals have no progress of their own; each habit's progress covers the
+  goal period.
 
 ## 5. Streak Recomputation
 
@@ -174,7 +171,7 @@ existing pattern in `src/routes/goals.ts` / `src/routes/tracking.ts`.
 | Method | Path | Notes |
 |---|---|---|
 | POST | `/goals` | Body: `{title, startDate, endDate}` |
-| GET | `/goals` | List user's goals, each with `habits: HabitSummary[]` and `unifiedProgress` (§4) |
+| GET | `/goals` | List user's goals, each with `habits: HabitSummary[]` |
 | GET | `/goals/:goalId` | Single goal, same shape |
 | PUT | `/goals/:goalId` | Partial update of `title`/`startDate`/`endDate` |
 | DELETE | `/goals/:goalId` | Cascades to habits and tasks. `204` on success, `404` if not found/not owned |
@@ -209,12 +206,10 @@ existing pattern in `src/routes/goals.ts` / `src/routes/tracking.ts`.
 
 ## 8. Known Gap (carried from spec)
 
-For a `THRESHOLD_COUNT` habit, `status: DONE` (streak) and `value ≥
-dailyMinValue` (progress) are independent. A day can be marked done
-(extending the streak) while its `value` is `null` or below threshold
-(not counting toward progress target). This is intentional per-field
-independence (§4), not a bug — but it means UI should always collect a
-`value` when marking done (defaulting to `dailyMinValue` so a plain toggle
-qualifies by default) to avoid *new* zero-value "done" tasks. Historical
+Progress counts only `status: DONE` tasks (§4). For a `THRESHOLD_COUNT`
+habit, a `DONE` task whose `value` is `null` or below `dailyMinValue` extends
+the streak but still does not count toward progress. UI should therefore
+always collect a `value` when marking done (defaulting to `dailyMinValue` so
+a plain toggle qualifies) to avoid zero-value "done" tasks. Historical
 done-but-unqualified tasks are not retroactively fixed, since completed
 tasks are never auto-modified.

@@ -51,7 +51,7 @@ const goalRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
         tags: ['Goals'],
         security: [{ bearerAuth: [] }],
         summary: 'List goals',
-        description: 'Returns all goals for the current user, with habits and progress',
+        description: 'Returns all goals for the current user, with their habits (each with its own progress)',
         response: {
           200: { type: 'array', items: GoalSchema },
         },

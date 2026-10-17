@@ -138,11 +138,8 @@ Computed on read, not stored (except `currentStreak`/`longestStreak`, which
   habit.targetDays`.
 - Progress is driven by `value`, independent of `status`. This is
   intentional (see §8 Known Gap) — don't special-case it away.
-- **`Goal.unifiedProgress`**: if every habit under the goal has the same
-  non-null `unit`, sum each habit's `current`/`target` into one
-  `{current, target}`. If units differ (or any habit has `unit: null`),
-  `unifiedProgress` is `null` and the API returns each habit's progress
-  independently — this is a server-side decision, not left to the client.
+- Goals have no progress of their own; each habit's progress covers the
+  goal period.
 
 ## 5. Streak Recomputation
 
@@ -174,7 +171,7 @@ existing pattern in `src/routes/goals.ts` / `src/routes/tracking.ts`.
 | Method | Path | Notes |
 |---|---|---|
 | POST | `/goals` | Body: `{title, startDate, endDate}` |
-| GET | `/goals` | List user's goals, each with `habits: HabitSummary[]` and `unifiedProgress` (§4) |
+| GET | `/goals` | List user's goals, each with `habits: HabitSummary[]` |
 | GET | `/goals/:goalId` | Single goal, same shape |
 | PUT | `/goals/:goalId` | Partial update of `title`/`startDate`/`endDate` |
 | DELETE | `/goals/:goalId` | Cascades to habits and tasks. `204` on success, `404` if not found/not owned |

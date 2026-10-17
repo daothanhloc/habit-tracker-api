@@ -43,7 +43,7 @@ describe('GoalService', () => {
   }
 
   describe('create', () => {
-    it('creates a goal with no habits and null unifiedProgress', async () => {
+    it('creates a goal with no habits and no unifiedProgress', async () => {
       const mockGoal = {
         id: 'goal-1',
         userId: 'user-1',
@@ -62,7 +62,7 @@ describe('GoalService', () => {
       });
 
       expect(result.title).toBe('Get Fit');
-      expect(result.unifiedProgress).toBeNull();
+      expect(result).not.toHaveProperty('unifiedProgress');
       expect(result.habits).toEqual([]);
     });
   });
@@ -77,50 +77,26 @@ describe('GoalService', () => {
     });
   });
 
-  describe('unifiedProgress', () => {
-    const mockGoal = {
-      id: 'goal-1',
-      userId: 'user-1',
-      title: 'Get Fit',
-      startDate: new Date('2026-01-01'),
-      endDate: new Date('2026-01-31'),
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-
-    it('sums progress when every habit shares the same non-null unit', async () => {
-      mockPrisma.goal.findFirst.mockResolvedValue(mockGoal);
-      mockHabitService.listSummariesForGoal.mockResolvedValue([
-        habitSummary({ id: 'h1', unit: 'km', progress: { current: 10, target: 100 } }),
-        habitSummary({ id: 'h2', unit: 'km', progress: { current: 5, target: 50 } }),
-      ] as any);
-
-      const result = await goalService.findById('goal-1', 'user-1');
-
-      expect(result?.unifiedProgress).toEqual({ current: 15, target: 150 });
-    });
-
-    it('is null when habits have different units', async () => {
-      mockPrisma.goal.findFirst.mockResolvedValue(mockGoal);
+  describe('findById with habits', () => {
+    it('returns the goal with its habit summaries and no unifiedProgress', async () => {
+      mockPrisma.goal.findFirst.mockResolvedValue({
+        id: 'goal-1',
+        userId: 'user-1',
+        title: 'Get Fit',
+        startDate: new Date('2026-01-01'),
+        endDate: new Date('2026-01-31'),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
       mockHabitService.listSummariesForGoal.mockResolvedValue([
         habitSummary({ id: 'h1', unit: 'km' }),
-        habitSummary({ id: 'h2', unit: 'sessions' }),
+        habitSummary({ id: 'h2', unit: 'km' }),
       ] as any);
 
       const result = await goalService.findById('goal-1', 'user-1');
 
-      expect(result?.unifiedProgress).toBeNull();
-    });
-
-    it('is null when a habit has no unit', async () => {
-      mockPrisma.goal.findFirst.mockResolvedValue(mockGoal);
-      mockHabitService.listSummariesForGoal.mockResolvedValue([
-        habitSummary({ id: 'h1', unit: null }),
-      ] as any);
-
-      const result = await goalService.findById('goal-1', 'user-1');
-
-      expect(result?.unifiedProgress).toBeNull();
+      expect(result?.habits).toHaveLength(2);
+      expect(result).not.toHaveProperty('unifiedProgress');
     });
   });
 

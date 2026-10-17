@@ -103,8 +103,9 @@ export class HabitService {
 ## API Route Structure
 
 All routes require JWT auth (except `/auth/*` and `/health`):
-- `POST/GET /auth/*` - Registration, login, token refresh, logout
-- `POST/GET/PUT/DELETE /habits` - Habit CRUD
-- `POST/GET /habits/:habitId/track` - Tracking records
-- `POST/GET/PUT/DELETE /habits/:habitId/goals` - Goals
+- `POST /auth/signup|login|refresh|logout` - Auth
+- `POST/GET/PUT/DELETE /goals`, `/goals/:goalId` - Goals
+- `POST/GET /goals/:goalId/habits` - Create/list habits under a goal (goalId is a path param, not in the body)
+- `GET/PUT/DELETE /habits/:habitId` - Single habit
+- `GET /habits/:habitId/tasks?from=&to=`, `GET .../tasks/today`, `PUT .../tasks/:date` - Tasks
 - `GET /health` - Health check (includes DB ping)

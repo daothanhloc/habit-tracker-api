@@ -60,6 +60,14 @@ describe('HabitService', () => {
       });
 
       expect(result.progress).toEqual({ current: 0, target: 100 });
+      // HabitSchema (the 201 response) requires these; omitting them makes
+      // fast-json-stringify throw '"goalId" is required!' -> 500
+      expect(result).toMatchObject({
+        goalId: 'goal-1',
+        userId: 'user-1',
+        createdAt: mockHabit.createdAt,
+        updatedAt: mockHabit.updatedAt,
+      });
       expect(mockPrisma.habit.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           goalType: 'SUM',

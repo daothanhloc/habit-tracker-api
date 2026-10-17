@@ -117,4 +117,45 @@ describe('tracking + streak scenarios (TaskService.upsert)', () => {
     expect(undone.task.status).toBe('NOT_DONE');
     expect(s.tasks.get(d(0)).status).toBe('NOT_DONE');
   });
+
+  describe('progress counts only DONE tasks', () => {
+    const habitSvc = (s: ReturnType<typeof setup>) => new HabitService(s.prisma);
+    const progress = async (s: ReturnType<typeof setup>) =>
+      ((await habitSvc(s).findById('habit-1', 'user-1')) as any).progress;
+
+    it('SUM: lazily created NOT_DONE tasks with defaultTaskValue do not count', async () => {
+      const s = setup({ goalType: 'SUM', targetValue: 100, defaultTaskValue: 5 });
+      await new TaskService(s.prisma, habitSvc(s)).getToday('habit-1', 'user-1');
+      expect(s.tasks.size).toBe(1);
+      expect(s.tasks.get(d(0)).value).toBe(5);
+      expect((await progress(s)).current).toBe(0);
+    });
+
+    it('SUM: marking done adds the value; un-marking removes it', async () => {
+      const s = setup({ goalType: 'SUM', targetValue: 100, defaultTaskValue: 5 });
+      await new TaskService(s.prisma, habitSvc(s)).getToday('habit-1', 'user-1');
+      await mark(s, d(0), 'done');
+      expect(await progress(s)).toEqual({ current: 5, target: 100 });
+      await mark(s, d(0), 'not_done');
+      expect((await progress(s)).current).toBe(0);
+    });
+
+    it('THRESHOLD_COUNT: only DONE tasks with value >= dailyMinValue count', async () => {
+      const s = setup({
+        goalType: 'THRESHOLD_COUNT',
+        dailyMinValue: 3,
+        targetDays: 10,
+        defaultTaskValue: 3,
+      });
+      // NOT_DONE with qualifying default value: must not count
+      await s.service.upsert('habit-1', 'user-1', d(-3), { status: 'not_done' });
+      expect(s.tasks.get(d(-3)).value).toBe(3);
+      // DONE with qualifying value: counts
+      await mark(s, d(-2), 'done');
+      // DONE with explicit null value: does not count
+      await s.service.upsert('habit-1', 'user-1', d(-1), { status: 'done', value: null } as any);
+      expect(s.tasks.get(d(-1)).value).toBeNull();
+      expect((await progress(s)).current).toBe(1);
+    });
+  });
 });

@@ -4,7 +4,7 @@ export interface InMemoryHabit {
   id: string;
   userId: string;
   goalId: string;
-  goalType: 'SUM' | 'DAYS';
+  goalType: 'SUM' | 'DAYS' | 'THRESHOLD_COUNT';
   targetValue: number | null;
   dailyMinValue: number | null;
   targetDays: number | null;

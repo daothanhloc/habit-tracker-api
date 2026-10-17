@@ -205,7 +205,11 @@ export class HabitService {
 
   private async progressFor(habit: PrismaHabit, startDate: Date, endDate: Date) {
     const tasks = await this.prisma.task.findMany({
-      where: { habitId: habit.id, date: { gte: startDate, lte: endDate } },
+      where: {
+        habitId: habit.id,
+        status: 'DONE',
+        date: { gte: startDate, lte: endDate },
+      },
       select: { value: true },
     });
 

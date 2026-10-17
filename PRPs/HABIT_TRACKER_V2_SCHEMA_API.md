@@ -130,14 +130,14 @@ needed (see `HABIT_TRACKER_V2_SPEC.md` consumer notes).
 Computed on read, not stored (except `currentStreak`/`longestStreak`, which
 *are* persisted on `Habit` and recomputed on every task mutation).
 
-- **`SUM`**: `current = Σ task.value` over all tasks in `[goal.startDate,
-  goal.endDate]` (null `value` treated as 0, regardless of `status`).
+- **`SUM`**: `current = Σ task.value` over tasks with `status = DONE` in
+  `[goal.startDate, goal.endDate]` (null `value` treated as 0).
   `target = habit.targetValue`.
-- **`THRESHOLD_COUNT`**: `current = count of tasks where value ≥
-  dailyMinValue` over the period (regardless of `status`). `target =
-  habit.targetDays`.
-- Progress is driven by `value`, independent of `status`. This is
-  intentional (see §8 Known Gap) — don't special-case it away.
+- **`THRESHOLD_COUNT`**: `current = count of tasks where status = DONE and
+  value ≥ dailyMinValue` over the period. `target = habit.targetDays`.
+- Only `DONE` tasks count toward progress: lazily created `NOT_DONE` rows
+  (pre-filled with `defaultTaskValue`) never inflate it. Un-marking a task
+  removes its value from progress.
 - Goals have no progress of their own; each habit's progress covers the
   goal period.
 
@@ -206,12 +206,10 @@ existing pattern in `src/routes/goals.ts` / `src/routes/tracking.ts`.
 
 ## 8. Known Gap (carried from spec)
 
-For a `THRESHOLD_COUNT` habit, `status: DONE` (streak) and `value ≥
-dailyMinValue` (progress) are independent. A day can be marked done
-(extending the streak) while its `value` is `null` or below threshold
-(not counting toward progress target). This is intentional per-field
-independence (§4), not a bug — but it means UI should always collect a
-`value` when marking done (defaulting to `dailyMinValue` so a plain toggle
-qualifies by default) to avoid *new* zero-value "done" tasks. Historical
+Progress counts only `status: DONE` tasks (§4). For a `THRESHOLD_COUNT`
+habit, a `DONE` task whose `value` is `null` or below `dailyMinValue` extends
+the streak but still does not count toward progress. UI should therefore
+always collect a `value` when marking done (defaulting to `dailyMinValue` so
+a plain toggle qualifies) to avoid zero-value "done" tasks. Historical
 done-but-unqualified tasks are not retroactively fixed, since completed
 tasks are never auto-modified.
